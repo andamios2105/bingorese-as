@@ -161,9 +161,13 @@ export default async function DashboardPage() {
         )}
       </section>
 
-      {(availableTables.length > 0 || requestedTables.length > 0) && (
-        <section className="mb-5">
-          <h2 className="mb-3 text-sm font-semibold text-slate-300">Tableros disponibles</h2>
+      <section className="mb-5">
+        <h2 className="mb-3 text-sm font-semibold text-slate-300">Ver tablas activas</h2>
+        {availableTables.length === 0 && requestedTables.length === 0 ? (
+          <p className="rounded-2xl bg-slate-900 p-4 text-sm text-slate-500">
+            No hay tablas activas disponibles por ahora. Vuelve a revisar más tarde.
+          </p>
+        ) : (
           <ul className="space-y-3">
             {requestedTables.map((t) => (
               <li key={t.id} className="rounded-2xl bg-slate-900 p-4 shadow-xl">
@@ -188,8 +192,8 @@ export default async function DashboardPage() {
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        )}
+      </section>
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-slate-300">Tus reseñas recientes</h2>

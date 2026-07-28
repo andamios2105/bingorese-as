@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { BingoTable, TableGridCell } from "@/types/database";
+import { AppSettings, BingoTable, TableGridCell } from "@/types/database";
 import AdminAssignableGrid from "@/components/admin/AdminAssignableGrid";
 import TableAccessManager, { AccessMember } from "@/components/admin/TableAccessManager";
 import TableManagementPanel from "@/components/admin/TableManagementPanel";
 import TablePrizeInfo from "@/components/TablePrizeInfo";
+import TableReviewQr from "@/components/TableReviewQr";
 
 export default async function AdminTableDetailPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -14,11 +15,12 @@ export default async function AdminTableDetailPage({ params }: { params: { id: s
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: table }, { data: adminProfile }] = await Promise.all([
+  const [{ data: table }, { data: adminProfile }, { data: settings }] = await Promise.all([
     supabase.from("bingo_tables").select("*").eq("id", params.id).maybeSingle<BingoTable>(),
     user
       ? supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle()
       : Promise.resolve({ data: null }),
+    supabase.from("app_settings").select("*").eq("id", true).maybeSingle<AppSettings>(),
   ]);
 
   if (!table) notFound();
@@ -54,14 +56,17 @@ export default async function AdminTableDetailPage({ params }: { params: { id: s
 
   return (
     <div className="space-y-4 py-4">
-      <div>
-        <Link href="/admin/tables" className="text-xs text-slate-500">
-          &larr; Volver a tableros
-        </Link>
-        <h2 className="mt-1 text-lg font-bold">{table.name}</h2>
-        <p className="text-xs text-slate-500">
-          {claimed}/100 casillas reclamadas · estado: {table.status}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <Link href="/admin/tables" className="text-xs text-slate-500">
+            &larr; Volver a tableros
+          </Link>
+          <h2 className="mt-1 text-lg font-bold">{table.name}</h2>
+          <p className="text-xs text-slate-500">
+            {claimed}/100 casillas reclamadas · estado: {table.status}
+          </p>
+        </div>
+        <TableReviewQr url={settings?.google_business_reviews_url ?? null} />
       </div>
 
       <TablePrizeInfo table={table} />

@@ -985,9 +985,11 @@ create policy "payouts_select_own_or_admin" on public.payout_requests
 create policy "registry_select_admin_only" on public.google_reviewers_registry
   for select using (public.is_admin());
 
--- app_settings: solo admin (el link del negocio se usa solo en el panel admin)
-create policy "settings_select_admin_only" on public.app_settings
-  for select using (public.is_admin());
+-- app_settings: cualquier empleado autenticado puede leerla (necesita ver
+-- el QR/link del negocio para pedirle la reseña al cliente); solo el admin
+-- puede escribirla (vía admin_update_app_settings, SECURITY DEFINER).
+create policy "settings_select_authenticated" on public.app_settings
+  for select using (auth.uid() is not null);
 
 -- =====================================================================
 -- VISTA: tablero compartido (lo que ve cualquier empleado con acceso) —

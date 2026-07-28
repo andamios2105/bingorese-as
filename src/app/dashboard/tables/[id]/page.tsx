@@ -1,9 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { BingoTable, TableGridCell } from "@/types/database";
+import { AppSettings, BingoTable, TableGridCell } from "@/types/database";
 import ClaimableBingoGrid from "@/components/ClaimableBingoGrid";
 import TablePrizeInfo from "@/components/TablePrizeInfo";
+import TableReviewQr from "@/components/TableReviewQr";
 
 const STATUS_TEXT: Record<BingoTable["status"], string> = {
   active: "activo",
@@ -21,11 +22,10 @@ export default async function TableDetailPage({ params }: { params: { id: string
 
   if (!user) redirect("/login");
 
-  const { data: table } = await supabase
-    .from("bingo_tables")
-    .select("*")
-    .eq("id", params.id)
-    .maybeSingle<BingoTable>();
+  const [{ data: table }, { data: settings }] = await Promise.all([
+    supabase.from("bingo_tables").select("*").eq("id", params.id).maybeSingle<BingoTable>(),
+    supabase.from("app_settings").select("*").eq("id", true).maybeSingle<AppSettings>(),
+  ]);
 
   if (!table) notFound();
 
@@ -39,12 +39,15 @@ export default async function TableDetailPage({ params }: { params: { id: string
 
   return (
     <main className="mx-auto min-h-dvh max-w-md px-4 pb-10 pt-6">
-      <header className="mb-5">
-        <Link href="/dashboard" className="text-xs text-slate-500">
-          &larr; Volver
-        </Link>
-        <h1 className="mt-1 text-lg font-bold">{table.name}</h1>
-        <p className="text-xs text-slate-500">{claimed}/100 casillas reclamadas</p>
+      <header className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <Link href="/dashboard" className="text-xs text-slate-500">
+            &larr; Volver
+          </Link>
+          <h1 className="mt-1 text-lg font-bold">{table.name}</h1>
+          <p className="text-xs text-slate-500">{claimed}/100 casillas reclamadas</p>
+        </div>
+        <TableReviewQr url={settings?.google_business_reviews_url ?? null} />
       </header>
 
       <div className="mb-5">
