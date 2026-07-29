@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { TableGridCell } from "@/types/database";
 import { formatDateTime } from "@/lib/validation";
 import ImageLightbox from "@/components/ImageLightbox";
 
 interface ExtraDetail {
+  id: string;
   google_profile_name_raw: string;
   reviewer_phone: string | null;
   screenshot_url: string | null;
@@ -14,9 +16,13 @@ interface ExtraDetail {
 }
 
 export default function CellDetailModal({ cell, onClose }: { cell: TableGridCell; onClose: () => void }) {
+  const router = useRouter();
   const [extra, setExtra] = useState<ExtraDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [showImage, setShowImage] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,7 +33,7 @@ export default function CellDetailModal({ cell, onClose }: { cell: TableGridCell
     // aplica, simplemente no llega nada y el modal se queda con lo básico.
     supabase
       .from("reviews_log")
-      .select("google_profile_name_raw, reviewer_phone, screenshot_url, assigned_by_admin")
+      .select("id, google_profile_name_raw, reviewer_phone, screenshot_url, assigned_by_admin")
       .eq("table_id", cell.table_id)
       .eq("cell_number", cell.cell_number)
       .in("status", ["pending", "verified"])
@@ -43,6 +49,24 @@ export default function CellDetailModal({ cell, onClose }: { cell: TableGridCell
       cancelled = true;
     };
   }, [cell.table_id, cell.cell_number]);
+
+  async function handleDelete() {
+    if (!extra) return;
+    setDeleting(true);
+    setDeleteError(null);
+
+    const res = await fetch(`/api/admin/reviews/${extra.id}/delete`, { method: "POST" });
+    const body = await res.json();
+    setDeleting(false);
+
+    if (!res.ok) {
+      setDeleteError(body.error);
+      return;
+    }
+
+    router.refresh();
+    onClose();
+  }
 
   return (
     <>
@@ -121,6 +145,44 @@ export default function CellDetailModal({ cell, onClose }: { cell: TableGridCell
             <p className="text-xs text-slate-500">
               Los detalles de la reseña (nombre/captura) solo los puede ver quien la reclamó o un administrador.
             </p>
+          )}
+
+          {extra && (
+            <div className="border-t border-slate-800 pt-3">
+              {deleteError && <p className="mb-2 text-xs text-red-400">{deleteError}</p>}
+              {confirmingDelete ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-400">
+                    ¿Seguro que quieres borrar esta casilla? La casilla queda libre para que cualquier empleado la
+                    reclame de nuevo
+                    {cell.status === "verified" ? " y se le resta 1 reseña del total al empleado" : ""}. No se puede
+                    deshacer.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="flex-1 rounded-lg bg-red-500 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
+                    >
+                      {deleting ? "Borrando..." : "Sí, borrar casilla"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmingDelete(false)}
+                      className="flex-1 rounded-lg bg-slate-800 py-2 text-sm font-semibold text-slate-300"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmingDelete(true)}
+                  className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-red-400"
+                >
+                  Borrar casilla
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

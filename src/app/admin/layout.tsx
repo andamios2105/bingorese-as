@@ -41,7 +41,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             className="relative whitespace-nowrap rounded-full bg-slate-900 px-4 py-2 font-medium text-slate-300 hover:bg-slate-800"
           >
             {(pendingByHref[item.href] ?? 0) > 0 && (
-              <span className="absolute -left-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-slate-950" />
+              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-slate-950" />
             )}
             {item.label}
           </Link>
