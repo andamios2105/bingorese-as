@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { sendPushToPromoter } from "@/lib/push";
 
 export async function POST(_request: Request, { params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -19,6 +20,14 @@ export async function POST(_request: Request, { params }: { params: { id: string
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  if (data?.promoter_id) {
+    await sendPushToPromoter(data.promoter_id, {
+      title: "✅ Reseña validada",
+      body: "Tu reseña fue validada. ¡Sigue reclamando casillas!",
+      url: "/dashboard",
+    }).catch(() => {});
   }
 
   return NextResponse.json({ review: data });

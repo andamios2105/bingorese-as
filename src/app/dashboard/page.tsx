@@ -10,6 +10,8 @@ import PaymentMethodForm from "@/components/PaymentMethodForm";
 import RecentReviews from "@/components/RecentReviews";
 import LogoutButton from "@/components/LogoutButton";
 import RequestAccessButton from "@/components/RequestAccessButton";
+import EnableNotificationsButton from "@/components/EnableNotificationsButton";
+import OnboardingTour from "@/components/OnboardingTour";
 import { currentPayoutAmount, daysUntil, formatCOP, formatDateTime } from "@/lib/validation";
 
 const STATUS_BADGE: Record<BingoTable["status"], string> = {
@@ -116,7 +118,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto min-h-dvh max-w-md px-4 pb-10 pt-6">
-      <header className="mb-5 flex items-center justify-between">
+      <header className="mb-2 flex items-center justify-between">
         <div>
           <p className="text-xs text-slate-500">Hola,</p>
           <h1 className="text-lg font-bold">{profile?.full_name ?? "Promotor"}</h1>
@@ -133,6 +135,14 @@ export default async function DashboardPage() {
           <LogoutButton />
         </div>
       </header>
+
+      <div className="mb-5">
+        <OnboardingTour />
+      </div>
+
+      <section className="mb-5">
+        <EnableNotificationsButton />
+      </section>
 
       <section className="mb-5 rounded-2xl bg-slate-900 p-4 shadow-xl">
         <div className="mb-3 flex items-baseline justify-between">

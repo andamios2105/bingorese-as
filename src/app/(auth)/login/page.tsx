@@ -5,6 +5,20 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
+function getGpsPosition(): Promise<GeolocationPosition | null> {
+  return new Promise((resolve) => {
+    if (!("geolocation" in navigator)) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve(pos),
+      () => resolve(null),
+      { timeout: 4000, maximumAge: 60_000 }
+    );
+  });
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -25,6 +39,24 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
+
+    // Registra la sesión (IP aproximada siempre; GPS exacto solo si el
+    // navegador ya tiene permiso concedido — si no, esto no pide nada
+    // nuevo, simplemente no manda coordenadas). Nunca bloquea el login.
+    const position = await getGpsPosition();
+    await fetch("/api/auth/log-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        position
+          ? {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+            }
+          : {}
+      ),
+    }).catch(() => {});
 
     router.refresh();
     router.push("/dashboard");
@@ -76,6 +108,11 @@ export default function LoginPage() {
           >
             {loading ? "Ingresando..." : "Ingresar"}
           </button>
+
+          <p className="text-center text-xs text-slate-500">
+            Al iniciar sesión registramos tu ubicación aproximada (IP) y, si lo permites en tu navegador, tu
+            ubicación exacta — por seguridad y prevención de fraude.
+          </p>
         </form>
 
         <p className="mt-6 text-center text-sm text-slate-400">

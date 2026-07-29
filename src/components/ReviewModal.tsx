@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toTitleCase } from "@/lib/validation";
+import { compressImageFile } from "@/lib/image";
 
 export default function ReviewModal({
   tableId,
@@ -42,12 +43,13 @@ export default function ReviewModal({
       return;
     }
 
-    const ext = file.name.split(".").pop() || "jpg";
+    const uploadFile = await compressImageFile(file);
+    const ext = uploadFile.name.split(".").pop() || "jpg";
     const path = `${user.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from("review-screenshots")
-      .upload(path, file, { contentType: file.type });
+      .upload(path, uploadFile, { contentType: uploadFile.type });
 
     if (uploadError) {
       setError(`No se pudo subir la captura: ${uploadError.message}`);

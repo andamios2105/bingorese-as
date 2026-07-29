@@ -68,24 +68,23 @@ Ver [`supabase/schema.sql`](supabase/schema.sql) — contiene:
 | `bingo_tables` | Tablero compartido de 100 casillas | `status` en `active/full/archived` |
 | `table_access` | Qué empleados pueden reclamar casillas en qué tablero | PK compuesta `(table_id, promoter_id)` |
 | `promoter_progress` | Contador personal de cada empleado hacia su próximo pago | 1 fila por empleado |
-| `google_reviewers_registry` | Candado global anti-duplicados por nombre | `google_handle` UNIQUE |
+| `google_reviewers_registry` | Historial de nombres de perfil usados (solo auditoría, no bloquea) | índice por `google_handle` |
 | `reviews_log` | Cada casilla reclamada, con su captura de pantalla | UNIQUE parcial `(table_id, cell_number)` mientras esté `pending`/`verified` |
 | `payout_requests` | Solicitudes/histórico de cobro por empleado | `UNIQUE(promoter_id, cycle_number, milestone)` |
 | `app_settings` | Link fijo del negocio en Google Maps (una sola fila) | usado por el admin para verificar |
 
-### Por qué una tabla de "registro" separada para el anti-duplicados
+### Por qué `google_reviewers_registry` ya no bloquea nombres repetidos
 
-Si el UNIQUE global viviera solo en `reviews_log.google_handle`, rechazar una reseña
-liberaría el nombre sin control fino. Separando el candado en
-`google_reviewers_registry`:
+Al principio el nombre normalizado del perfil de Google era único globalmente (un
+"candado" anti-duplicados). En la práctica hay mucha gente que comparte el mismo
+nombre y eso generaba rechazos falsos de reseñas legítimas. El nombre **no es un
+identificador confiable**, así que se quitó el `UNIQUE` y el bloqueo automático: la
+tabla ahora es solo un historial de qué nombre se usó en cada reseña, útil como
+referencia para el admin. El anti-fraude real sigue siendo la verificación manual del
+admin (comparar la captura de pantalla contra el listado de Google Maps con Ctrl+F).
 
-- Al **enviar** una reseña → se inserta como `pending` (reserva el nombre de inmediato,
-  incluso antes de que un admin la revise — evita que dos empleados intenten registrar
-  al mismo tiempo el mismo reviewer mientras ambas solicitudes están en vuelo).
-- Al **aprobar** → la fila pasa a `verified` y queda **para siempre**, bloqueando ese
-  perfil de Google en cualquier empleado/tablero futuro (Regla 2.a, literal).
-- Al **rechazar** → la fila se **borra** del registro (Regla 2.c: "la casilla se
-  libera"). El intento rechazado queda igual auditable en `reviews_log`.
+- Al **enviar** una reseña → se guarda el nombre en el historial (no reserva nada).
+- Al **rechazar** → la fila se **borra** del historial (la casilla se libera igual).
 
 ### Instalación
 
@@ -175,23 +174,23 @@ nunca ve el binario de la imagen, solo recibe la URL resultante.
 2. `submit_review()` corre en una sola transacción:
    a. Bloquea la fila del tablero (`for update`) y verifica que esté `active`.
    b. Verifica que el empleado tenga acceso a ese tablero (`table_access`).
-   c. **Normaliza** el nombre de Google (minúsculas, sin acentos ni símbolos) y lo
-      compara contra `google_reviewers_registry` — si ya existe, se rechaza con:
-      *"Este perfil de Google ya registró una reseña en el sistema anteriormente."*
+   c. **Normaliza** el nombre de Google (minúsculas, sin acentos ni símbolos) solo para
+      guardarlo en `google_reviewers_registry` como historial — no bloquea nada, porque
+      el nombre no es un identificador confiable (mucha gente comparte nombre).
    d. Verifica que la casilla no esté ya tomada (`pending`/`verified`) en ese tablero —
       respaldado por el índice `UNIQUE` parcial, así que ni una condición de carrera
       puede colar un duplicado (el segundo `insert` simplemente falla y se traduce a
       *"Esa casilla ya fue reclamada por otro empleado. Elige otra."*).
-   e. Inserta en `reviews_log` (`pending`) y reserva el nombre en el registro global.
+   e. Inserta en `reviews_log` (`pending`) y guarda el nombre en el historial.
    f. Si esa era la casilla #100 del tablero, lo marca `full` automáticamente.
 
 **El admin rechaza una reseña.** `admin_reject_review()` marca `rejected` (con motivo,
-conservado para auditoría) y **borra** la fila del registro global — la casilla queda
-libre de nuevo para cualquier empleado, y si el tablero estaba `full` vuelve a `active`.
+conservado para auditoría) y **borra** la fila del historial — la casilla queda libre
+de nuevo para cualquier empleado, y si el tablero estaba `full` vuelve a `active`.
 
 **El admin aprueba una reseña.** `admin_approve_review()` marca `verified`, suma 1 al
 `promoter_progress` de ESE empleado (creándolo si es su primera reseña), y deja el
-registro global como `verified` — bloqueo permanente e irreversible de ese perfil.
+historial como `verified` para referencia futura.
 
 **Un empleado reclama su pago.** `request_payout()` valida en SQL que su
 `verified_count` sea *exactamente* uno de `{10,30,50,70,100}`, que no tenga ya una

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { TableGridCell } from "@/types/database";
 import { formatDateTime } from "@/lib/validation";
+import ImageLightbox from "@/components/ImageLightbox";
 
 interface ExtraDetail {
   google_profile_name_raw: string;
@@ -14,6 +15,7 @@ interface ExtraDetail {
 export default function CellDetailModal({ cell, onClose }: { cell: TableGridCell; onClose: () => void }) {
   const [extra, setExtra] = useState<ExtraDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showImage, setShowImage] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +44,7 @@ export default function CellDetailModal({ cell, onClose }: { cell: TableGridCell
   }, [cell.table_id, cell.cell_number]);
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center" onClick={onClose}>
       <div
         className="w-full max-w-sm rounded-t-3xl bg-slate-900 p-6 shadow-2xl sm:rounded-3xl"
@@ -95,12 +98,14 @@ export default function CellDetailModal({ cell, onClose }: { cell: TableGridCell
               {extra.screenshot_url && (
                 <div>
                   <p className="mb-1 text-xs text-slate-500">Captura de la reseña</p>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={extra.screenshot_url}
-                    alt="Captura de la reseña"
-                    className="max-h-64 w-full rounded-lg border border-slate-800 object-contain"
-                  />
+                  <button type="button" onClick={() => setShowImage(true)} className="block w-full">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={extra.screenshot_url}
+                      alt="Captura de la reseña"
+                      className="max-h-64 w-full rounded-lg border border-slate-800 object-contain"
+                    />
+                  </button>
                 </div>
               )}
             </>
@@ -112,5 +117,9 @@ export default function CellDetailModal({ cell, onClose }: { cell: TableGridCell
         </div>
       </div>
     </div>
+    {showImage && extra?.screenshot_url && (
+      <ImageLightbox src={extra.screenshot_url} alt="Captura de la reseña" onClose={() => setShowImage(false)} />
+    )}
+    </>
   );
 }

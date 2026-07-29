@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { sendPushToPromoter } from "@/lib/push";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -22,6 +23,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  if (data?.promoter_id) {
+    await sendPushToPromoter(data.promoter_id, {
+      title: "❌ Reseña rechazada",
+      body: `Tu reseña fue rechazada. Motivo: ${reason}`,
+      url: "/dashboard",
+    }).catch(() => {});
   }
 
   return NextResponse.json({ review: data });

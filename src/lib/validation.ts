@@ -76,6 +76,18 @@ export function formatDrawDate(dateStr: string | null): string {
   });
 }
 
+export function timeSinceLabel(dateStr: string | null): string {
+  if (!dateStr) return "Nunca ha entrado";
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  if (diffMs < 0) return "Ahora mismo";
+  const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  if (totalHours < 1) return "Hace menos de 1 hora";
+  if (days === 0) return `Hace ${hours}h`;
+  return `Hace ${days}d ${hours}h`;
+}
+
 export function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return "";
   return new Date(dateStr).toLocaleString("es-CO", {

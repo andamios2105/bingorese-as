@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import ImageLightbox from "@/components/ImageLightbox";
 
 export interface PendingReviewItem {
   id: string;
@@ -20,6 +21,7 @@ export default function ReviewVerificationList({ reviews }: { reviews: PendingRe
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [openImage, setOpenImage] = useState<{ src: string; alt: string } | null>(null);
 
   async function approve(id: string) {
     setBusyId(id);
@@ -58,6 +60,7 @@ export default function ReviewVerificationList({ reviews }: { reviews: PendingRe
   }
 
   return (
+    <>
     <ul className="space-y-3 py-4">
       {reviews.map((r) => (
         <li key={r.id} className="rounded-2xl bg-slate-900 p-4 shadow-xl">
@@ -76,14 +79,20 @@ export default function ReviewVerificationList({ reviews }: { reviews: PendingRe
             </span>
           </div>
 
-          <a href={r.screenshot_url} target="_blank" rel="noreferrer" className="mb-3 block">
+          <button
+            type="button"
+            onClick={() =>
+              setOpenImage({ src: r.screenshot_url, alt: `Captura de la reseña de ${r.google_profile_name_raw}` })
+            }
+            className="mb-3 block w-full"
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={r.screenshot_url}
               alt={`Captura de la reseña de ${r.google_profile_name_raw}`}
               className="max-h-64 w-full rounded-lg border border-slate-800 object-contain"
             />
-          </a>
+          </button>
 
           {error && busyId === null && <p className="mb-2 text-sm text-red-400">{error}</p>}
 
@@ -132,5 +141,7 @@ export default function ReviewVerificationList({ reviews }: { reviews: PendingRe
         </li>
       ))}
     </ul>
+    {openImage && <ImageLightbox src={openImage.src} alt={openImage.alt} onClose={() => setOpenImage(null)} />}
+    </>
   );
 }

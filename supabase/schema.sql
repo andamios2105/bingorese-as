@@ -77,6 +77,46 @@ create table if not exists public.fines_log (
 comment on table public.fines_log is 'Auditoría de multas (suspensión temporal por X días) aplicadas a un empleado.';
 
 -- ---------------------------------------------------------------------
+-- LOGIN_SESSIONS — ubicación aproximada (IP) y, si el empleado lo
+-- permite, GPS exacto, registrados en el momento de iniciar sesión. Con
+-- aviso explícito al empleado — nunca rastreo continuo ni en segundo plano.
+-- ---------------------------------------------------------------------
+create table if not exists public.login_sessions (
+  id uuid primary key default gen_random_uuid(),
+  promoter_id uuid not null references public.profiles (id) on delete cascade,
+  ip_address text,
+  ip_city text,
+  ip_region text,
+  ip_country text,
+  gps_lat double precision,
+  gps_lng double precision,
+  gps_accuracy_m double precision,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists login_sessions_promoter_idx on public.login_sessions (promoter_id, created_at desc);
+
+comment on table public.login_sessions is
+  'Un registro por inicio de sesión: IP/ciudad aproximada siempre, y lat/lng exactos solo si el empleado dio permiso de ubicación en su navegador.';
+
+-- ---------------------------------------------------------------------
+-- PUSH_SUBSCRIPTIONS — un dispositivo suscrito a notificaciones push
+-- ---------------------------------------------------------------------
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  promoter_id uuid not null references public.profiles (id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists push_subscriptions_promoter_idx on public.push_subscriptions (promoter_id);
+
+comment on table public.push_subscriptions is
+  'Un dispositivo/navegador suscrito a notificaciones push Web Push. Un empleado puede tener varias (varios dispositivos).';
+
+-- ---------------------------------------------------------------------
 -- 2. BINGO_TABLES — tableros compartidos de 100 casillas, creados por el admin
 -- ---------------------------------------------------------------------
 create table public.bingo_tables (
@@ -125,14 +165,16 @@ comment on table public.promoter_progress is
   'Progreso personal del empleado hacia el próximo hito de pago (10/30/50/70/100), acumulado entre TODOS los tableros. Se resetea a 0 (y cycle_number+1) solo para este empleado cuando se le aprueba un pago.';
 
 -- ---------------------------------------------------------------------
--- 5. GOOGLE_REVIEWERS_REGISTRY — candado global anti-duplicados por nombre
+-- 5. GOOGLE_REVIEWERS_REGISTRY — historial de nombres de perfil usados
 -- ---------------------------------------------------------------------
--- Solo contiene handles en estado 'pending' o 'verified'. Si una reseña
--- es rechazada, su fila se BORRA de aquí (libera el nombre). Si es
--- aprobada, la fila queda para siempre bloqueando ese perfil de Google.
+-- NO bloquea nombres repetidos: hay mucha gente con el mismo nombre, así
+-- que el nombre no es un identificador confiable. El anti-fraude real es
+-- la verificación manual del admin (captura vs. Google Maps con Ctrl+F).
+-- Esta tabla queda solo como historial/auditoría de qué nombre se usó en
+-- cada reseña. Si una reseña es rechazada, su fila se BORRA de aquí.
 create table public.google_reviewers_registry (
   id uuid primary key default gen_random_uuid(),
-  google_handle text not null unique, -- normalizado: minúsculas, sin espacios/símbolos
+  google_handle text not null, -- normalizado: minúsculas, sin espacios/símbolos
   google_profile_name_raw text not null,
   promoter_id uuid not null references public.profiles (id),
   review_log_id uuid not null,
@@ -140,8 +182,10 @@ create table public.google_reviewers_registry (
   registered_at timestamptz not null default now()
 );
 
+create index google_reviewers_registry_handle_idx on public.google_reviewers_registry (google_handle);
+
 comment on table public.google_reviewers_registry is
-  'Registro global de perfiles de Google que ya reseñaron. UNIQUE(google_handle) es el blindaje central anti-duplicados (Regla 2.a), sin importar en qué tablero ni qué empleado.';
+  'Historial de perfiles de Google que han reseñado (auditoría, no bloquea nombres repetidos). El anti-fraude real es la verificación manual del admin contra Google Maps.';
 
 -- ---------------------------------------------------------------------
 -- 6. REVIEWS_LOG — cada casilla reclamada en cualquier tablero
@@ -370,6 +414,80 @@ begin
   end if;
 
   return v_profile;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- admin_list_promoter_activity: ¿confirmaron su correo? + última conexión
+-- (para no depender solo del link de confirmación, que a veces falla, y
+-- para que el admin sepa hace cuánto no entra cada empleado)
+-- ---------------------------------------------------------------------
+drop function if exists public.admin_list_promoter_verification();
+
+create or replace function public.admin_list_promoter_activity()
+returns table (promoter_id uuid, email_confirmed boolean, last_sign_in_at timestamptz)
+language sql
+security definer
+set search_path = public
+as $$
+  select p.id, (au.email_confirmed_at is not null), au.last_sign_in_at
+    from public.profiles p
+    join auth.users au on au.id = p.id
+   where p.role = 'promoter'
+     and public.is_admin();
+$$;
+
+-- ---------------------------------------------------------------------
+-- log_login_session: registra ubicación aproximada/GPS al iniciar sesión
+-- ---------------------------------------------------------------------
+create or replace function public.log_login_session(
+  p_ip_address text,
+  p_ip_city text,
+  p_ip_region text,
+  p_ip_country text,
+  p_gps_lat double precision,
+  p_gps_lng double precision,
+  p_gps_accuracy_m double precision
+) returns public.login_sessions
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_session public.login_sessions;
+begin
+  if v_uid is null then
+    raise exception 'No autenticado';
+  end if;
+
+  insert into public.login_sessions (
+    promoter_id, ip_address, ip_city, ip_region, ip_country, gps_lat, gps_lng, gps_accuracy_m
+  ) values (
+    v_uid, p_ip_address, p_ip_city, p_ip_region, p_ip_country, p_gps_lat, p_gps_lng, p_gps_accuracy_m
+  ) returning * into v_session;
+
+  return v_session;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- admin_verify_promoter_email: el admin confirma la cuenta manualmente
+-- ---------------------------------------------------------------------
+create or replace function public.admin_verify_promoter_email(p_promoter_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Solo un administrador puede verificar cuentas.';
+  end if;
+
+  update auth.users
+     set email_confirmed_at = coalesce(email_confirmed_at, now())
+   where id = p_promoter_id;
 end;
 $$;
 
@@ -788,14 +906,12 @@ begin
     raise exception 'No tienes acceso aprobado a este tablero.';
   end if;
 
-  -- Candado global anti-duplicados por nombre de perfil (Regla 2.a)
+  -- El nombre de perfil NO bloquea el envío (mucha gente comparte nombre):
+  -- solo se normaliza y se guarda para el historial/auditoría del admin.
   v_handle := public.normalize_google_handle(p_google_profile_name);
   v_display_name := initcap(trim(p_google_profile_name));
   if v_handle = '' then
     raise exception 'Nombre de perfil de Google inválido.';
-  end if;
-  if exists (select 1 from public.google_reviewers_registry where google_handle = v_handle) then
-    raise exception 'Este perfil de Google ya registró una reseña en el sistema anteriormente.';
   end if;
 
   -- Blindaje anti-doble-reclamo de la misma casilla (el UNIQUE index es la
@@ -1221,10 +1337,35 @@ alter table public.payout_requests enable row level security;
 alter table public.google_reviewers_registry enable row level security;
 alter table public.app_settings enable row level security;
 alter table public.fines_log enable row level security;
+alter table public.login_sessions enable row level security;
+alter table public.push_subscriptions enable row level security;
 
 drop policy if exists "fines_select_own_or_admin" on public.fines_log;
 create policy "fines_select_own_or_admin" on public.fines_log
   for select using (promoter_id = auth.uid() or public.is_admin());
+
+drop policy if exists "login_sessions_select_own_or_admin" on public.login_sessions;
+create policy "login_sessions_select_own_or_admin" on public.login_sessions
+  for select using (promoter_id = auth.uid() or public.is_admin());
+
+-- push_subscriptions: cada empleado administra sus propios dispositivos;
+-- el admin (o el propio backend actuando como admin al notificar) puede
+-- leer las de cualquiera para poder enviarles el push.
+drop policy if exists "push_select_own_or_admin" on public.push_subscriptions;
+create policy "push_select_own_or_admin" on public.push_subscriptions
+  for select using (promoter_id = auth.uid() or public.is_admin());
+
+drop policy if exists "push_insert_own" on public.push_subscriptions;
+create policy "push_insert_own" on public.push_subscriptions
+  for insert with check (promoter_id = auth.uid());
+
+drop policy if exists "push_update_own" on public.push_subscriptions;
+create policy "push_update_own" on public.push_subscriptions
+  for update using (promoter_id = auth.uid()) with check (promoter_id = auth.uid());
+
+drop policy if exists "push_delete_own" on public.push_subscriptions;
+create policy "push_delete_own" on public.push_subscriptions
+  for delete using (promoter_id = auth.uid());
 
 drop policy if exists "profiles_select_own_or_admin" on public.profiles;
 create policy "profiles_select_own_or_admin" on public.profiles
@@ -1330,14 +1471,35 @@ join public.profiles p on p.id = pr.promoter_id;
 grant select on public.admin_payout_requests_view to authenticated;
 
 -- =====================================================================
+-- VISTA: última ubicación conocida de cada empleado (la más reciente de
+-- login_sessions) — cada quien ve la suya; el admin ve todas.
+-- =====================================================================
+create or replace view public.admin_promoter_last_location as
+select distinct on (ls.promoter_id)
+  ls.promoter_id,
+  ls.ip_address,
+  ls.ip_city,
+  ls.ip_region,
+  ls.ip_country,
+  ls.gps_lat,
+  ls.gps_lng,
+  ls.gps_accuracy_m,
+  ls.created_at
+from public.login_sessions ls
+where ls.promoter_id = auth.uid() or public.is_admin()
+order by ls.promoter_id, ls.created_at desc;
+
+grant select on public.admin_promoter_last_location to authenticated;
+
+-- =====================================================================
 -- STORAGE: bucket público para las capturas de pantalla de reseñas
 -- =====================================================================
 -- Público de solo-lectura por simplicidad (las URLs llevan un UUID
 -- aleatorio, no son adivinables/enumerables). Cualquier usuario
 -- autenticado puede subir; nadie puede sobrescribir ni borrar lo de otro.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('review-screenshots', 'review-screenshots', true, 5242880, array['image/png', 'image/jpeg', 'image/webp'])
-on conflict (id) do update set public = true;
+values ('review-screenshots', 'review-screenshots', true, 15728640, array['image/png', 'image/jpeg', 'image/webp'])
+on conflict (id) do update set public = true, file_size_limit = 15728640;
 
 drop policy if exists "review_screenshots_authenticated_upload" on storage.objects;
 create policy "review_screenshots_authenticated_upload"

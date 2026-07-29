@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { sendPushToPromoter } from "@/lib/push";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -26,6 +27,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  if (data?.promoter_id) {
+    const { data: table } = await supabase.from("bingo_tables").select("name").eq("id", params.id).maybeSingle();
+    if (table?.name) {
+      await sendPushToPromoter(data.promoter_id, {
+        title: "🎉 ¡Bienvenido!",
+        body: `Ya tienes acceso al tablero "${table.name}". ¡Empieza a reclamar casillas!`,
+        url: `/dashboard/tables/${params.id}`,
+      }).catch(() => {});
+    }
   }
 
   return NextResponse.json({ access: data }, { status: 201 });
