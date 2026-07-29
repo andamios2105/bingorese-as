@@ -35,7 +35,7 @@ export default async function AdminAuditPage() {
             {paidHistory.map((p: any) => (
               <li key={p.id} className="flex items-center justify-between rounded-lg bg-slate-800 px-3 py-2">
                 <span>
-                  {p.full_name} · hito {p.milestone}
+                  {p.full_name} · {p.reviews_count} reseñas × {formatCOP(p.rate_applied)}
                 </span>
                 <span className="font-semibold text-emerald-400">{formatCOP(p.amount)}</span>
               </li>

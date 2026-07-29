@@ -1,12 +1,24 @@
-import { Milestone } from "@/types/database";
+export const MIN_REVIEWS_TO_CLAIM = 10;
 
-export const MILESTONE_AMOUNTS: Record<Milestone, number> = {
-  10: 10_000,
-  30: 30_000,
-  50: 50_000,
-  70: 70_000,
-  100: 100_000,
-};
+/**
+ * Tarifa progresiva por reseña — réplica en cliente de
+ * public.payout_rate_for_count() en SQL. Cuantas más reseñas acumuladas,
+ * más alta la tarifa que se paga por TODAS (no solo las nuevas).
+ */
+export function payoutRateForCount(count: number): number {
+  if (count >= 100) return 1500;
+  if (count >= 50) return 1300;
+  if (count >= 30) return 1100;
+  return 800;
+}
+
+export function canClaimPayout(verifiedCount: number): boolean {
+  return verifiedCount >= MIN_REVIEWS_TO_CLAIM;
+}
+
+export function currentPayoutAmount(verifiedCount: number): number {
+  return verifiedCount * payoutRateForCount(verifiedCount);
+}
 
 /**
  * Réplica en cliente de public.normalize_google_handle() en SQL.
@@ -23,6 +35,18 @@ export function normalizeGoogleHandle(raw: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Réplica en cliente de initcap() en SQL — misma normalización que aplican
+ * las funciones de Postgres al guardar, solo para feedback instantáneo.
+ */
+export function toTitleCase(raw: string): string {
+  return raw
+    .toLowerCase()
+    .split(" ")
+    .map((word) => (word.length > 0 ? word[0].toUpperCase() + word.slice(1) : word))
+    .join(" ");
+}
+
 const GOOGLE_MAPS_URL_PATTERN =
   /^https?:\/\/(www\.)?google\.[a-z.]+\/maps|goo\.gl|maps\.app\.goo\.gl/i;
 
@@ -32,15 +56,6 @@ export function isValidGoogleMapsUrl(url: string): boolean {
 
 export function sanitizeReviewUrl(url: string): string {
   return url.trim().toLowerCase().split("?")[0].replace(/\/+$/, "");
-}
-
-export function nextMilestone(verifiedCount: number): Milestone | null {
-  const milestones: Milestone[] = [10, 30, 50, 70, 100];
-  return milestones.find((m) => m > verifiedCount) ?? null;
-}
-
-export function isAtClaimableMilestone(verifiedCount: number): verifiedCount is Milestone {
-  return [10, 30, 50, 70, 100].includes(verifiedCount);
 }
 
 export function daysUntil(dateStr: string | null): number | null {

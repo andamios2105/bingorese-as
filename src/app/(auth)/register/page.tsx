@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { toTitleCase } from "@/lib/validation";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -87,6 +88,7 @@ export default function RegisterPage() {
               required
               value={form.fullName}
               onChange={(e) => update("fullName", e.target.value)}
+              onBlur={(e) => update("fullName", toTitleCase(e.target.value))}
               className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-base outline-none focus:border-emerald-500"
               placeholder="Juan Pérez"
             />

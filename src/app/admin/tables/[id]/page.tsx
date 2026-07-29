@@ -6,7 +6,6 @@ import AdminAssignableGrid from "@/components/admin/AdminAssignableGrid";
 import TableAccessManager, { AccessMember } from "@/components/admin/TableAccessManager";
 import TableManagementPanel from "@/components/admin/TableManagementPanel";
 import TablePrizeInfo from "@/components/TablePrizeInfo";
-import TableReviewQr from "@/components/TableReviewQr";
 
 export default async function AdminTableDetailPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -56,20 +55,20 @@ export default async function AdminTableDetailPage({ params }: { params: { id: s
 
   return (
     <div className="space-y-4 py-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <Link href="/admin/tables" className="text-xs text-slate-500">
-            &larr; Volver a tableros
-          </Link>
-          <h2 className="mt-1 text-lg font-bold">{table.name}</h2>
-          <p className="text-xs text-slate-500">
-            {claimed}/100 casillas reclamadas · estado: {table.status}
-          </p>
-        </div>
-        <TableReviewQr url={settings?.google_business_reviews_url ?? null} />
+      <div>
+        <Link href="/admin/tables" className="text-xs text-slate-500">
+          &larr; Volver a tableros
+        </Link>
+        <h2 className="mt-1 text-lg font-bold">{table.name}</h2>
+        <p className="text-xs text-slate-500">
+          {claimed}/100 casillas reclamadas · estado: {table.status}
+        </p>
       </div>
 
-      <TablePrizeInfo table={table} />
+      <TablePrizeInfo
+        table={table}
+        qrUrl={table.google_maps_url ?? settings?.google_business_reviews_url ?? null}
+      />
 
       <TableAccessManager tableId={table.id} members={members} pendingRequests={pendingRequests} />
 

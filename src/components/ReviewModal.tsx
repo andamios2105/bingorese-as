@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { toTitleCase } from "@/lib/validation";
 
 export default function ReviewModal({
   tableId,
@@ -100,6 +101,7 @@ export default function ReviewModal({
               required
               value={googleProfileName}
               onChange={(e) => setGoogleProfileName(e.target.value)}
+              onBlur={(e) => setGoogleProfileName(toTitleCase(e.target.value))}
               placeholder="Ej: María Camila Ríos"
               className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-base outline-none focus:border-emerald-500"
             />
@@ -126,7 +128,6 @@ export default function ReviewModal({
               required
               type="file"
               accept="image/*"
-              capture="environment"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               className="sr-only"
             />

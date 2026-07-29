@@ -14,6 +14,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   const body = await request.json().catch(() => null);
   const name: string | undefined = body?.name;
+  const businessName: string | null = body?.businessName ?? null;
+  const googleMapsUrl: string | null = body?.googleMapsUrl ?? null;
   const prize: string | null = body?.prize ?? null;
   const lotteryName: string | null = body?.lotteryName ?? null;
   const drawDate: string | null = body?.drawDate ?? null;
@@ -25,6 +27,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const { data, error } = await supabase.rpc("admin_update_table_details", {
     p_table_id: params.id,
     p_name: name,
+    p_business_name: businessName,
+    p_google_maps_url: googleMapsUrl,
     p_prize: prize,
     p_lottery_name: lotteryName,
     p_draw_date: drawDate,

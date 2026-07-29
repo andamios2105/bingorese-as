@@ -59,12 +59,14 @@ export default function PayoutRequestList({ payouts }: { payouts: AdminPayoutReq
 
           <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-lg bg-slate-800 px-3 py-2">
-              <p className="text-slate-500">Hito</p>
-              <p className="font-semibold">{p.milestone} casillas</p>
+              <p className="text-slate-500">Reseñas × tarifa</p>
+              <p className="font-semibold">
+                {p.reviews_count} × {formatCOP(p.rate_applied)}
+              </p>
             </div>
             <div className="rounded-lg bg-slate-800 px-3 py-2">
-              <p className="text-slate-500">Reseñas verificadas (ciclo {p.cycle_number})</p>
-              <p className="font-semibold">{p.verified_reviews_in_cycle}</p>
+              <p className="text-slate-500">Confirmación (deben coincidir)</p>
+              <p className="font-semibold">{p.verified_reviews_in_cycle} reseñas</p>
             </div>
             <div className="col-span-2 rounded-lg bg-slate-800 px-3 py-2 capitalize">
               <p className="text-slate-500">Pago a</p>

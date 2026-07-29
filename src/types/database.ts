@@ -2,7 +2,6 @@ export type UserRole = "promoter" | "admin";
 export type ReviewStatus = "pending" | "verified" | "rejected";
 export type PayoutStatus = "pending" | "approved" | "rejected";
 export type TableStatus = "active" | "paused" | "full" | "archived";
-export type Milestone = 10 | 30 | 50 | 70 | 100;
 
 export interface Profile {
   id: string;
@@ -12,8 +11,20 @@ export interface Profile {
   payment_method: "nequi" | "daviplata" | "bancolombia" | "otro" | null;
   payment_number: string | null;
   role: UserRole;
+  is_suspended: boolean;
+  suspended_until: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface FineLog {
+  id: string;
+  promoter_id: string;
+  days: number;
+  reason: string;
+  applied_by: string;
+  applied_at: string;
+  expires_at: string;
 }
 
 export interface BingoTable {
@@ -23,6 +34,8 @@ export interface BingoTable {
   prize: string | null;
   lottery_name: string | null;
   draw_date: string | null;
+  business_name: string | null;
+  google_maps_url: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -77,7 +90,8 @@ export interface PayoutRequest {
   id: string;
   promoter_id: string;
   cycle_number: number;
-  milestone: Milestone;
+  reviews_count: number;
+  rate_applied: number;
   amount: number;
   payment_method: string;
   payment_number: string;
@@ -99,4 +113,5 @@ export interface AppSettings {
   updated_at: string;
 }
 
-export const MILESTONES: Milestone[] = [10, 30, 50, 70, 100];
+/** Umbrales donde sube la tarifa progresiva (ver payoutRateForCount en lib/validation.ts) */
+export const PAYOUT_TIER_MARKERS = [10, 30, 50, 100] as const;

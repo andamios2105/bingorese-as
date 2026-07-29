@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BingoTable, TableStatus } from "@/types/database";
+import { toTitleCase } from "@/lib/validation";
 
 const STATUS_LABEL: Record<TableStatus, string> = {
   active: "Activo",
@@ -14,6 +15,8 @@ const STATUS_LABEL: Record<TableStatus, string> = {
 export default function TableManagementPanel({ table, claimedCount }: { table: BingoTable; claimedCount: number }) {
   const router = useRouter();
   const [name, setName] = useState(table.name);
+  const [businessName, setBusinessName] = useState(table.business_name ?? "");
+  const [googleMapsUrl, setGoogleMapsUrl] = useState(table.google_maps_url ?? "");
   const [prize, setPrize] = useState(table.prize ?? "");
   const [lotteryName, setLotteryName] = useState(table.lottery_name ?? "");
   const [drawDate, setDrawDate] = useState(table.draw_date ?? "");
@@ -31,7 +34,7 @@ export default function TableManagementPanel({ table, claimedCount }: { table: B
     const res = await fetch(`/api/admin/tables/${table.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, prize, lotteryName, drawDate: drawDate || null }),
+      body: JSON.stringify({ name, businessName, googleMapsUrl, prize, lotteryName, drawDate: drawDate || null }),
     });
     const body = await res.json();
     setSaving(false);
@@ -123,6 +126,28 @@ export default function TableManagementPanel({ table, claimedCount }: { table: B
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onBlur={(e) => setName(toTitleCase(e.target.value))}
+            className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-400">Nombre del negocio</label>
+          <input
+            value={businessName}
+            onChange={(e) => setBusinessName(e.target.value)}
+            onBlur={(e) => setBusinessName(toTitleCase(e.target.value))}
+            placeholder="Ej: Restaurante El Buen Sabor"
+            className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-400">Link de Google Maps (para el QR)</label>
+          <input
+            value={googleMapsUrl}
+            onChange={(e) => setGoogleMapsUrl(e.target.value)}
+            placeholder="https://www.google.com/maps/place/..."
             className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
           />
         </div>
@@ -132,6 +157,7 @@ export default function TableManagementPanel({ table, claimedCount }: { table: B
           <input
             value={prize}
             onChange={(e) => setPrize(e.target.value)}
+            onBlur={(e) => setPrize(toTitleCase(e.target.value))}
             placeholder="Ej: Nevera de 300L"
             className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
           />
@@ -143,6 +169,7 @@ export default function TableManagementPanel({ table, claimedCount }: { table: B
             <input
               value={lotteryName}
               onChange={(e) => setLotteryName(e.target.value)}
+              onBlur={(e) => setLotteryName(toTitleCase(e.target.value))}
               placeholder="Ej: Lotería de Boyacá"
               className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
             />

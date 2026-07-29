@@ -1,6 +1,6 @@
 "use client";
 
-import { MILESTONES } from "@/types/database";
+import { PAYOUT_TIER_MARKERS } from "@/types/database";
 
 export default function ProgressBar({ verifiedCount }: { verifiedCount: number }) {
   return (
@@ -12,7 +12,7 @@ export default function ProgressBar({ verifiedCount }: { verifiedCount: number }
         />
       </div>
       <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
-        {MILESTONES.map((m) => (
+        {PAYOUT_TIER_MARKERS.map((m) => (
           <span key={m} className={verifiedCount >= m ? "font-semibold text-emerald-400" : ""}>
             {m}
           </span>

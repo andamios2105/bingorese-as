@@ -1,7 +1,22 @@
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
+import { createClient } from "@/lib/supabase/server";
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const supabase = createClient();
+
+  const [{ count: pendingReviews }, { count: pendingPayouts }, { count: pendingAccess }] = await Promise.all([
+    supabase.from("reviews_log").select("*", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("payout_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("table_access").select("*", { count: "exact", head: true }).eq("status", "requested"),
+  ]);
+
+  const pendingByHref: Record<string, number> = {
+    "/admin/reviews": pendingReviews ?? 0,
+    "/admin/payouts": pendingPayouts ?? 0,
+    "/admin/tables": pendingAccess ?? 0,
+  };
+
   return (
     <div className="min-h-dvh pb-20">
       <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
@@ -23,8 +38,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link
             key={item.href}
             href={item.href}
-            className="whitespace-nowrap rounded-full bg-slate-900 px-4 py-2 font-medium text-slate-300 hover:bg-slate-800"
+            className="relative whitespace-nowrap rounded-full bg-slate-900 px-4 py-2 font-medium text-slate-300 hover:bg-slate-800"
           >
+            {(pendingByHref[item.href] ?? 0) > 0 && (
+              <span className="absolute -left-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-slate-950" />
+            )}
             {item.label}
           </Link>
         ))}

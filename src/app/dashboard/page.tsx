@@ -1,14 +1,16 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { BingoTable, Profile, PromoterProgress, ReviewLog, TableAccess } from "@/types/database";
+import { BingoTable, PayoutRequest, Profile, PromoterProgress, ReviewLog, TableAccess } from "@/types/database";
 import ProgressBar from "@/components/ProgressBar";
 import ClaimPayoutButton from "@/components/ClaimPayoutButton";
+import MyPayoutRequests from "@/components/MyPayoutRequests";
+import PayoutHistory from "@/components/PayoutHistory";
 import PaymentMethodForm from "@/components/PaymentMethodForm";
-import ReviewsList from "@/components/ReviewsList";
+import RecentReviews from "@/components/RecentReviews";
 import LogoutButton from "@/components/LogoutButton";
 import RequestAccessButton from "@/components/RequestAccessButton";
-import { daysUntil } from "@/lib/validation";
+import { currentPayoutAmount, daysUntil, formatCOP, formatDateTime } from "@/lib/validation";
 
 const STATUS_BADGE: Record<BingoTable["status"], string> = {
   active: "bg-emerald-500/15 text-emerald-400",
@@ -53,6 +55,24 @@ export default async function DashboardPage() {
     }
   }
 
+  const isTemporarilyFined =
+    !!profile && !profile.is_suspended && !!profile.suspended_until && new Date(profile.suspended_until) > new Date();
+
+  if (profile?.is_suspended || isTemporarilyFined) {
+    return (
+      <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-4 text-center">
+        <div className="mb-3 text-4xl">🚫</div>
+        <h1 className="text-lg font-bold">Tu cuenta está suspendida</h1>
+        <p className="mt-2 text-sm text-slate-400">
+          {profile?.is_suspended
+            ? "El administrador suspendió tu cuenta. No puedes reclamar casillas, pedir acceso a tableros ni cobrar hasta que te reactiven."
+            : `Tu cuenta está suspendida temporalmente hasta el ${formatDateTime(profile?.suspended_until ?? null)}.`}
+        </p>
+        <LogoutButton />
+      </main>
+    );
+  }
+
   const verifiedCount = progress?.verified_count ?? 0;
 
   const [{ data: tables }, { data: myAccess }] = await Promise.all([
@@ -75,13 +95,24 @@ export default async function DashboardPage() {
   const availableTables = (tables ?? []).filter((t) => t.status === "active" && !myAccessByTable.has(t.id));
   const requestedTables = (tables ?? []).filter((t) => myAccessByTable.get(t.id) === "requested");
 
-  const { data: reviews } = await supabase
-    .from("reviews_log")
-    .select("*")
-    .eq("promoter_id", user.id)
-    .order("submitted_at", { ascending: false })
-    .limit(20)
-    .returns<ReviewLog[]>();
+  const [{ data: reviews }, { data: myPayouts }] = await Promise.all([
+    supabase
+      .from("reviews_log")
+      .select("*")
+      .eq("promoter_id", user.id)
+      .order("submitted_at", { ascending: false })
+      .limit(20)
+      .returns<ReviewLog[]>(),
+    supabase
+      .from("payout_requests")
+      .select("*")
+      .eq("promoter_id", user.id)
+      .order("requested_at", { ascending: false })
+      .limit(30)
+      .returns<PayoutRequest[]>(),
+  ]);
+
+  const hasPendingPayout = (myPayouts ?? []).some((p) => p.status === "pending");
 
   return (
     <main className="mx-auto min-h-dvh max-w-md px-4 pb-10 pt-6">
@@ -105,16 +136,21 @@ export default async function DashboardPage() {
 
       <section className="mb-5 rounded-2xl bg-slate-900 p-4 shadow-xl">
         <div className="mb-3 flex items-baseline justify-between">
-          <p className="text-3xl font-extrabold text-emerald-400">
-            {verifiedCount}
-            <span className="text-base font-medium text-slate-500"> reseñas verificadas</span>
-          </p>
+          <p className="text-3xl font-extrabold text-emerald-400">{formatCOP(currentPayoutAmount(verifiedCount))}</p>
+          <p className="text-sm text-slate-500">{verifiedCount} reseñas verificadas</p>
         </div>
         <ProgressBar verifiedCount={verifiedCount} />
+        <p className="mt-2 text-xs text-slate-500">Llevas acumulado desde tu último cobro.</p>
       </section>
 
-      <section className="mb-5">
-        <ClaimPayoutButton verifiedCount={verifiedCount} hasPaymentMethod={!!profile?.payment_method} />
+      <section className="mb-5 space-y-4">
+        <MyPayoutRequests payouts={myPayouts ?? []} />
+        <ClaimPayoutButton
+          verifiedCount={verifiedCount}
+          hasPaymentMethod={!!profile?.payment_method}
+          hasPendingRequest={hasPendingPayout}
+        />
+        <PayoutHistory payouts={myPayouts ?? []} />
       </section>
 
       <section className="mb-5">
@@ -196,8 +232,7 @@ export default async function DashboardPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-slate-300">Tus reseñas recientes</h2>
-        <ReviewsList reviews={reviews ?? []} />
+        <RecentReviews reviews={reviews ?? []} />
       </section>
     </main>
   );

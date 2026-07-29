@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import { AppSettings, BingoTable, TableGridCell } from "@/types/database";
 import ClaimableBingoGrid from "@/components/ClaimableBingoGrid";
 import TablePrizeInfo from "@/components/TablePrizeInfo";
-import TableReviewQr from "@/components/TableReviewQr";
 
 const STATUS_TEXT: Record<BingoTable["status"], string> = {
   active: "activo",
@@ -39,19 +38,19 @@ export default async function TableDetailPage({ params }: { params: { id: string
 
   return (
     <main className="mx-auto min-h-dvh max-w-md px-4 pb-10 pt-6">
-      <header className="mb-5 flex items-start justify-between gap-3">
-        <div>
-          <Link href="/dashboard" className="text-xs text-slate-500">
-            &larr; Volver
-          </Link>
-          <h1 className="mt-1 text-lg font-bold">{table.name}</h1>
-          <p className="text-xs text-slate-500">{claimed}/100 casillas reclamadas</p>
-        </div>
-        <TableReviewQr url={settings?.google_business_reviews_url ?? null} />
+      <header className="mb-5">
+        <Link href="/dashboard" className="text-xs text-slate-500">
+          &larr; Volver
+        </Link>
+        <h1 className="mt-1 text-lg font-bold">{table.name}</h1>
+        <p className="text-xs text-slate-500">{claimed}/100 casillas reclamadas</p>
       </header>
 
       <div className="mb-5">
-        <TablePrizeInfo table={table} />
+        <TablePrizeInfo
+          table={table}
+          qrUrl={table.google_maps_url ?? settings?.google_business_reviews_url ?? null}
+        />
       </div>
 
       <ClaimableBingoGrid tableId={table.id} cells={cells ?? []} interactive={table.status === "active"} />

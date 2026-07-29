@@ -51,11 +51,30 @@ create table if not exists public.profiles (
   payment_method text check (payment_method in ('nequi', 'daviplata', 'bancolombia', 'otro')),
   payment_number text,
   role text not null default 'promoter' check (role in ('promoter', 'admin')),
+  -- suspensión indefinida (botón "Suspender") vs temporal con fecha de fin
+  -- ("Multar" por X días, se reactiva sola al pasar la fecha):
+  is_suspended boolean not null default false,
+  suspended_until timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 comment on table public.profiles is 'Perfil de usuario (empleado/promotor o admin). 1:1 con auth.users.';
+
+-- ---------------------------------------------------------------------
+-- FINES_LOG — historial de multas (suspensiones temporales) aplicadas
+-- ---------------------------------------------------------------------
+create table if not exists public.fines_log (
+  id uuid primary key default gen_random_uuid(),
+  promoter_id uuid not null references public.profiles (id) on delete cascade,
+  days int not null check (days > 0),
+  reason text not null,
+  applied_by uuid not null references public.profiles (id),
+  applied_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+
+comment on table public.fines_log is 'Auditoría de multas (suspensión temporal por X días) aplicadas a un empleado.';
 
 -- ---------------------------------------------------------------------
 -- 2. BINGO_TABLES — tableros compartidos de 100 casillas, creados por el admin
@@ -67,6 +86,8 @@ create table public.bingo_tables (
   prize text,
   lottery_name text,
   draw_date date,
+  business_name text,
+  google_maps_url text,
   created_by uuid not null references public.profiles (id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -171,22 +192,27 @@ create table public.payout_requests (
   id uuid primary key default gen_random_uuid(),
   promoter_id uuid not null references public.profiles (id),
   cycle_number int not null,
-  milestone int not null check (milestone in (10, 30, 50, 70, 100)),
-  amount numeric(12, 0) generated always as (milestone * 1000) stored,
+  -- Tarifa progresiva: cuantas más reseñas lleve acumuladas, más alta la
+  -- tarifa por unidad que se le paga por TODAS las reseñas del ciclo
+  -- (no solo las nuevas). Mínimo 10 reseñas para poder cobrar.
+  reviews_count int not null check (reviews_count >= 10),
+  rate_applied numeric(12, 0) not null,
+  amount numeric(12, 0) generated always as (reviews_count * rate_applied) stored,
   payment_method text not null,
   payment_number text not null,
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   requested_at timestamptz not null default now(),
   resolved_at timestamptz,
   resolved_by uuid references public.profiles (id),
-  -- Un mismo empleado no puede pedir el mismo hito dos veces en el mismo ciclo:
-  unique (promoter_id, cycle_number, milestone)
+  -- Un mismo empleado solo puede tener una solicitud por ciclo (cobrar
+  -- resetea el ciclo, así que no hay forma de pedir dos veces el mismo):
+  unique (promoter_id, cycle_number)
 );
 
 create index payout_requests_status_idx on public.payout_requests (status);
 
 comment on table public.payout_requests is
-  'Solicitudes de cobro por hito (10/30/50/70/100) por empleado. Al aprobar, se resetea el progreso personal de ESE empleado (promoter_progress), sin afectar los tableros compartidos.';
+  'Solicitudes de cobro por empleado con tarifa progresiva (payout_rate_for_count). Al aprobar, se resetea el progreso personal de ESE empleado (promoter_progress), sin afectar los tableros compartidos.';
 
 -- ---------------------------------------------------------------------
 -- 8. APP_SETTINGS — link fijo del negocio en Google Maps (para que el
@@ -232,9 +258,205 @@ as $$
 $$;
 
 -- ---------------------------------------------------------------------
+-- is_promoter_suspended: suspendido indefinido, o multa temporal vigente
+-- ---------------------------------------------------------------------
+create or replace function public.is_promoter_suspended(p_promoter_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select is_suspended or (suspended_until is not null and suspended_until > now())
+       from public.profiles where id = p_promoter_id),
+    false
+  );
+$$;
+
+-- ---------------------------------------------------------------------
+-- admin_suspend_promoter / admin_reactivate_promoter: suspensión indefinida
+-- ---------------------------------------------------------------------
+create or replace function public.admin_suspend_promoter(p_promoter_id uuid)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_profile public.profiles;
+begin
+  if not public.is_admin() then
+    raise exception 'Solo un administrador puede suspender empleados.';
+  end if;
+
+  update public.profiles
+     set is_suspended = true, updated_at = now()
+   where id = p_promoter_id and role = 'promoter'
+   returning * into v_profile;
+
+  if not found then
+    raise exception 'Empleado no encontrado.';
+  end if;
+
+  return v_profile;
+end;
+$$;
+
+create or replace function public.admin_reactivate_promoter(p_promoter_id uuid)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_profile public.profiles;
+begin
+  if not public.is_admin() then
+    raise exception 'Solo un administrador puede reactivar empleados.';
+  end if;
+
+  update public.profiles
+     set is_suspended = false, suspended_until = null, updated_at = now()
+   where id = p_promoter_id and role = 'promoter'
+   returning * into v_profile;
+
+  if not found then
+    raise exception 'Empleado no encontrado.';
+  end if;
+
+  return v_profile;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- admin_update_promoter_profile: edita nombre/teléfono/método de pago de
+-- un empleado (NO su correo — eso está atado a su cuenta de auth).
+-- ---------------------------------------------------------------------
+create or replace function public.admin_update_promoter_profile(
+  p_promoter_id uuid,
+  p_full_name text,
+  p_phone text,
+  p_payment_method text,
+  p_payment_number text
+) returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_profile public.profiles;
+begin
+  if not public.is_admin() then
+    raise exception 'Solo un administrador puede editar empleados.';
+  end if;
+  if trim(coalesce(p_full_name, '')) = '' then
+    raise exception 'El empleado necesita un nombre.';
+  end if;
+  if p_payment_method is not null and p_payment_method not in ('nequi', 'daviplata', 'bancolombia', 'otro') then
+    raise exception 'Método de pago inválido.';
+  end if;
+
+  update public.profiles
+     set full_name = initcap(trim(p_full_name)),
+         phone = nullif(trim(coalesce(p_phone, '')), ''),
+         payment_method = p_payment_method,
+         payment_number = nullif(trim(coalesce(p_payment_number, '')), ''),
+         updated_at = now()
+   where id = p_promoter_id and role = 'promoter'
+   returning * into v_profile;
+
+  if not found then
+    raise exception 'Empleado no encontrado.';
+  end if;
+
+  return v_profile;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- admin_fine_promoter: "multa" — suspensión temporal por X días
+-- ---------------------------------------------------------------------
+create or replace function public.admin_fine_promoter(p_promoter_id uuid, p_days int, p_reason text)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_profile public.profiles;
+  v_expires_at timestamptz;
+begin
+  if not public.is_admin() then
+    raise exception 'Solo un administrador puede multar empleados.';
+  end if;
+  if p_days is null or p_days <= 0 then
+    raise exception 'El número de días debe ser mayor a 0.';
+  end if;
+  if trim(coalesce(p_reason, '')) = '' then
+    raise exception 'La multa necesita un motivo.';
+  end if;
+  if not exists (select 1 from public.profiles where id = p_promoter_id and role = 'promoter') then
+    raise exception 'Empleado no encontrado.';
+  end if;
+
+  v_expires_at := now() + (p_days || ' days')::interval;
+
+  update public.profiles
+     set suspended_until = v_expires_at, updated_at = now()
+   where id = p_promoter_id
+   returning * into v_profile;
+
+  insert into public.fines_log (promoter_id, days, reason, applied_by, expires_at)
+  values (p_promoter_id, p_days, trim(p_reason), auth.uid(), v_expires_at);
+
+  return v_profile;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- admin_delete_promoter: solo si el empleado NO tiene historial (reseñas
+-- ni solicitudes de pago) — si tiene, se debe suspender en vez de borrar.
+-- ---------------------------------------------------------------------
+create or replace function public.admin_delete_promoter(p_promoter_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_history_count int;
+begin
+  if not public.is_admin() then
+    raise exception 'Solo un administrador puede borrar empleados.';
+  end if;
+
+  select
+    (select count(*) from public.reviews_log where promoter_id = p_promoter_id) +
+    (select count(*) from public.payout_requests where promoter_id = p_promoter_id)
+  into v_history_count;
+
+  if v_history_count > 0 then
+    raise exception 'Este empleado ya tiene reseñas o pagos registrados — suspéndelo en vez de borrarlo para no perder el historial.';
+  end if;
+
+  delete from public.table_access where promoter_id = p_promoter_id;
+  delete from public.promoter_progress where promoter_id = p_promoter_id;
+  delete from public.fines_log where promoter_id = p_promoter_id;
+  delete from public.profiles where id = p_promoter_id and role = 'promoter';
+end;
+$$;
+
+-- ---------------------------------------------------------------------
 -- admin_create_table: crea un tablero nuevo de 100 casillas
 -- ---------------------------------------------------------------------
-create or replace function public.admin_create_table(p_name text)
+create or replace function public.admin_create_table(
+  p_name text,
+  p_business_name text default null,
+  p_google_maps_url text default null,
+  p_prize text default null,
+  p_lottery_name text default null,
+  p_draw_date date default null
+)
 returns public.bingo_tables
 language plpgsql
 security definer
@@ -250,8 +472,17 @@ begin
     raise exception 'El tablero necesita un nombre.';
   end if;
 
-  insert into public.bingo_tables (name, created_by)
-  values (trim(p_name), auth.uid())
+  insert into public.bingo_tables (
+    name, business_name, google_maps_url, prize, lottery_name, draw_date, created_by
+  ) values (
+    initcap(trim(p_name)),
+    nullif(initcap(trim(coalesce(p_business_name, ''))), ''),
+    nullif(trim(coalesce(p_google_maps_url, '')), ''),
+    nullif(initcap(trim(coalesce(p_prize, ''))), ''),
+    nullif(initcap(trim(coalesce(p_lottery_name, ''))), ''),
+    p_draw_date,
+    auth.uid()
+  )
   returning * into v_table;
 
   return v_table;
@@ -259,11 +490,13 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------
--- admin_update_table_details: edita nombre/premio/lotería/fecha de juego
+-- admin_update_table_details: edita nombre/negocio/QR/premio/lotería/fecha
 -- ---------------------------------------------------------------------
 create or replace function public.admin_update_table_details(
   p_table_id uuid,
   p_name text,
+  p_business_name text,
+  p_google_maps_url text,
   p_prize text,
   p_lottery_name text,
   p_draw_date date
@@ -283,9 +516,11 @@ begin
   end if;
 
   update public.bingo_tables
-     set name = trim(p_name),
-         prize = nullif(trim(coalesce(p_prize, '')), ''),
-         lottery_name = nullif(trim(coalesce(p_lottery_name, '')), ''),
+     set name = initcap(trim(p_name)),
+         business_name = nullif(initcap(trim(coalesce(p_business_name, ''))), ''),
+         google_maps_url = nullif(trim(coalesce(p_google_maps_url, '')), ''),
+         prize = nullif(initcap(trim(coalesce(p_prize, ''))), ''),
+         lottery_name = nullif(initcap(trim(coalesce(p_lottery_name, ''))), ''),
          draw_date = p_draw_date,
          updated_at = now()
    where id = p_table_id
@@ -423,6 +658,9 @@ begin
   if v_uid is null then
     raise exception 'No autenticado';
   end if;
+  if public.is_promoter_suspended(v_uid) then
+    raise exception 'Tu cuenta está suspendida. Contacta al administrador.';
+  end if;
 
   select * into v_table from public.bingo_tables where id = p_table_id;
   if not found then
@@ -516,11 +754,15 @@ declare
   v_promoter_id uuid := auth.uid();
   v_table public.bingo_tables;
   v_handle text;
+  v_display_name text;
   v_new_review public.reviews_log;
   v_claimed_count int;
 begin
   if v_promoter_id is null then
     raise exception 'No autenticado';
+  end if;
+  if public.is_promoter_suspended(v_promoter_id) then
+    raise exception 'Tu cuenta está suspendida. Contacta al administrador.';
   end if;
 
   if p_cell_number is null or p_cell_number < 1 or p_cell_number > 100 then
@@ -548,6 +790,7 @@ begin
 
   -- Candado global anti-duplicados por nombre de perfil (Regla 2.a)
   v_handle := public.normalize_google_handle(p_google_profile_name);
+  v_display_name := initcap(trim(p_google_profile_name));
   if v_handle = '' then
     raise exception 'Nombre de perfil de Google inválido.';
   end if;
@@ -568,7 +811,7 @@ begin
     insert into public.reviews_log (
       table_id, cell_number, promoter_id, google_handle, google_profile_name_raw, screenshot_url, status
     ) values (
-      p_table_id, p_cell_number, v_promoter_id, v_handle, trim(p_google_profile_name), p_screenshot_url, 'pending'
+      p_table_id, p_cell_number, v_promoter_id, v_handle, v_display_name, p_screenshot_url, 'pending'
     ) returning * into v_new_review;
   exception when unique_violation then
     raise exception 'Esa casilla ya fue reclamada por otro empleado. Elige otra.';
@@ -577,7 +820,7 @@ begin
   insert into public.google_reviewers_registry (
     google_handle, google_profile_name_raw, promoter_id, review_log_id, status
   ) values (
-    v_handle, trim(p_google_profile_name), v_promoter_id, v_new_review.id, 'pending'
+    v_handle, v_display_name, v_promoter_id, v_new_review.id, 'pending'
   );
 
   -- Si esta era la casilla 100, el tablero queda lleno: el admin deberá
@@ -762,7 +1005,23 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------
--- request_payout: solo habilitado exactamente en 10/30/50/70/100
+-- payout_rate_for_count: tarifa progresiva por reseña según el rango
+-- ---------------------------------------------------------------------
+create or replace function public.payout_rate_for_count(p_count int)
+returns numeric
+language sql
+immutable
+as $$
+  select case
+    when p_count >= 100 then 1500
+    when p_count >= 50 then 1300
+    when p_count >= 30 then 1100
+    else 800
+  end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- request_payout: mínimo 10 reseñas; paga reseñas_actuales × tarifa del rango
 -- ---------------------------------------------------------------------
 create or replace function public.request_payout()
 returns public.payout_requests
@@ -775,14 +1034,19 @@ declare
   v_progress public.promoter_progress;
   v_profile public.profiles;
   v_request public.payout_requests;
+  v_rate numeric;
 begin
+  if public.is_promoter_suspended(v_promoter_id) then
+    raise exception 'Tu cuenta está suspendida. Contacta al administrador.';
+  end if;
+
   select * into v_progress from public.promoter_progress where promoter_id = v_promoter_id for update;
   if not found then
     raise exception 'Aún no tienes reseñas verificadas.';
   end if;
 
-  if v_progress.verified_count not in (10, 30, 50, 70, 100) then
-    raise exception 'Solo puedes reclamar el pago al llegar exactamente a 10, 30, 50, 70 o 100 reseñas verificadas. Llevas %.', v_progress.verified_count;
+  if v_progress.verified_count < 10 then
+    raise exception 'Necesitas al menos 10 reseñas verificadas para poder cobrar. Llevas %.', v_progress.verified_count;
   end if;
 
   if exists (
@@ -797,10 +1061,12 @@ begin
     raise exception 'Debes registrar tu método de pago (Nequi/Daviplata) antes de reclamar.';
   end if;
 
+  v_rate := public.payout_rate_for_count(v_progress.verified_count);
+
   insert into public.payout_requests (
-    promoter_id, cycle_number, milestone, payment_method, payment_number
+    promoter_id, cycle_number, reviews_count, rate_applied, payment_method, payment_number
   ) values (
-    v_promoter_id, v_progress.cycle_number, v_progress.verified_count, v_profile.payment_method, v_profile.payment_number
+    v_promoter_id, v_progress.cycle_number, v_progress.verified_count, v_rate, v_profile.payment_method, v_profile.payment_number
   ) returning * into v_request;
 
   return v_request;
@@ -836,8 +1102,14 @@ begin
    where id = p_payout_id
    returning * into v_payout;
 
+  -- Descuenta SOLO las reseñas que se pagaron en esta solicitud — si el
+  -- empleado sumó más reseñas después de pedir el cobro (y antes de que tú
+  -- lo aprobaras), esas de más quedan a su favor en el nuevo ciclo, en vez
+  -- de perderse en un reset a 0.
   update public.promoter_progress
-     set verified_count = 0, cycle_number = cycle_number + 1, updated_at = now()
+     set verified_count = greatest(verified_count - v_payout.reviews_count, 0),
+         cycle_number = cycle_number + 1,
+         updated_at = now()
    where promoter_id = v_payout.promoter_id;
 
   return v_payout;
@@ -896,7 +1168,7 @@ begin
       from auth.users where id = v_uid;
 
     insert into public.profiles (id, full_name, email)
-    values (v_uid, v_full_name, v_email)
+    values (v_uid, initcap(v_full_name), v_email)
     on conflict (id) do nothing;
   end if;
 
@@ -921,7 +1193,7 @@ begin
   insert into public.profiles (id, full_name, email, phone)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data ->> 'full_name', ''),
+    initcap(coalesce(new.raw_user_meta_data ->> 'full_name', '')),
     new.email,
     new.raw_user_meta_data ->> 'phone'
   );
@@ -948,6 +1220,11 @@ alter table public.reviews_log enable row level security;
 alter table public.payout_requests enable row level security;
 alter table public.google_reviewers_registry enable row level security;
 alter table public.app_settings enable row level security;
+alter table public.fines_log enable row level security;
+
+drop policy if exists "fines_select_own_or_admin" on public.fines_log;
+create policy "fines_select_own_or_admin" on public.fines_log
+  for select using (promoter_id = auth.uid() or public.is_admin());
 
 drop policy if exists "profiles_select_own_or_admin" on public.profiles;
 create policy "profiles_select_own_or_admin" on public.profiles
@@ -1030,17 +1307,22 @@ select
   p.email,
   pr.payment_method,
   pr.payment_number,
-  pr.milestone,
+  pr.reviews_count,
+  pr.rate_applied,
   pr.amount,
   pr.status,
   pr.cycle_number,
   pr.requested_at,
   pr.resolved_at,
   (
+    -- Solo las reseñas que ya estaban verificadas AL MOMENTO de pedir el
+    -- cobro (no las que se aprobaron después, aunque compartan ciclo) —
+    -- así el desglose siempre coincide con reviews_count/amount.
     select count(*) from public.reviews_log rl
      where rl.promoter_id = pr.promoter_id
        and rl.counted_in_cycle = pr.cycle_number
        and rl.status = 'verified'
+       and rl.verified_at <= pr.requested_at
   ) as verified_reviews_in_cycle
 from public.payout_requests pr
 join public.profiles p on p.id = pr.promoter_id;
