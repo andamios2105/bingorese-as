@@ -36,6 +36,7 @@ export interface BingoTable {
   draw_date: string | null;
   business_name: string | null;
   google_maps_url: string | null;
+  keyword: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

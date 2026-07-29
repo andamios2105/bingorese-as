@@ -128,6 +128,9 @@ create table public.bingo_tables (
   draw_date date,
   business_name text,
   google_maps_url text,
+  -- Palabra/frase que el admin pide mencionar en cada reseña de este
+  -- tablero (para poder ubicarla rápido en el listado de Google Maps).
+  keyword text,
   created_by uuid not null references public.profiles (id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -573,7 +576,8 @@ create or replace function public.admin_create_table(
   p_google_maps_url text default null,
   p_prize text default null,
   p_lottery_name text default null,
-  p_draw_date date default null
+  p_draw_date date default null,
+  p_keyword text default null
 )
 returns public.bingo_tables
 language plpgsql
@@ -591,7 +595,7 @@ begin
   end if;
 
   insert into public.bingo_tables (
-    name, business_name, google_maps_url, prize, lottery_name, draw_date, created_by
+    name, business_name, google_maps_url, prize, lottery_name, draw_date, keyword, created_by
   ) values (
     initcap(trim(p_name)),
     nullif(initcap(trim(coalesce(p_business_name, ''))), ''),
@@ -599,6 +603,7 @@ begin
     nullif(initcap(trim(coalesce(p_prize, ''))), ''),
     nullif(initcap(trim(coalesce(p_lottery_name, ''))), ''),
     p_draw_date,
+    nullif(trim(coalesce(p_keyword, '')), ''),
     auth.uid()
   )
   returning * into v_table;
@@ -617,7 +622,8 @@ create or replace function public.admin_update_table_details(
   p_google_maps_url text,
   p_prize text,
   p_lottery_name text,
-  p_draw_date date
+  p_draw_date date,
+  p_keyword text default null
 ) returns public.bingo_tables
 language plpgsql
 security definer
@@ -640,6 +646,7 @@ begin
          prize = nullif(initcap(trim(coalesce(p_prize, ''))), ''),
          lottery_name = nullif(initcap(trim(coalesce(p_lottery_name, ''))), ''),
          draw_date = p_draw_date,
+         keyword = nullif(trim(coalesce(p_keyword, '')), ''),
          updated_at = now()
    where id = p_table_id
    returning * into v_table;

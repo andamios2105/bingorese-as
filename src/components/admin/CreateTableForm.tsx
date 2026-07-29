@@ -12,6 +12,7 @@ export default function CreateTableForm() {
   const [prize, setPrize] = useState("");
   const [lotteryName, setLotteryName] = useState("");
   const [drawDate, setDrawDate] = useState("");
+  const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +31,7 @@ export default function CreateTableForm() {
         prize,
         lotteryName,
         drawDate: drawDate || null,
+        keyword,
       }),
     });
     const body = await res.json();
@@ -46,6 +48,7 @@ export default function CreateTableForm() {
     setPrize("");
     setLotteryName("");
     setDrawDate("");
+    setKeyword("");
     router.refresh();
   }
 
@@ -117,6 +120,17 @@ export default function CreateTableForm() {
             className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-400">Palabra clave</label>
+        <input
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="Ej: Andamios Leguizamon"
+          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
+        />
+        <p className="mt-1 text-xs text-slate-500">La palabra o frase que cada reseña de este tablero debe mencionar.</p>
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}

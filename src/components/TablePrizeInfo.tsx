@@ -9,7 +9,7 @@ export default async function TablePrizeInfo({
   table: BingoTable;
   qrUrl?: string | null;
 }) {
-  const hasInfo = !!(table.prize || table.lottery_name || table.draw_date);
+  const hasInfo = !!(table.prize || table.lottery_name || table.draw_date || table.keyword);
   if (!hasInfo && !qrUrl) return null;
 
   const days = daysUntil(table.draw_date);
@@ -35,6 +35,11 @@ export default async function TablePrizeInfo({
                   : days === 0
                     ? "¡Juega hoy!"
                     : "Ya jugó"}
+            </p>
+          )}
+          {table.keyword && (
+            <p className="mt-2 rounded-lg bg-white/10 px-2.5 py-1.5 text-sm font-semibold">
+              🔑 Palabra clave: <span className="font-bold">{table.keyword}</span>
             </p>
           )}
         </div>

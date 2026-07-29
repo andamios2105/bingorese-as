@@ -19,6 +19,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const prize: string | null = body?.prize ?? null;
   const lotteryName: string | null = body?.lotteryName ?? null;
   const drawDate: string | null = body?.drawDate ?? null;
+  const keyword: string | null = body?.keyword ?? null;
 
   if (!name?.trim()) {
     return NextResponse.json({ error: "El tablero necesita un nombre." }, { status: 400 });
@@ -32,6 +33,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     p_prize: prize,
     p_lottery_name: lotteryName,
     p_draw_date: drawDate,
+    p_keyword: keyword,
   });
 
   if (error) {
