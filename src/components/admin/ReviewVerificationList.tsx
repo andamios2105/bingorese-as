@@ -75,7 +75,11 @@ export default function ReviewVerificationList({ reviews }: { reviews: PendingRe
               </p>
             </div>
             <span className="shrink-0 text-xs text-slate-500">
-              {new Date(r.submitted_at).toLocaleDateString("es-CO", { day: "2-digit", month: "short" })}
+              {new Date(r.submitted_at).toLocaleDateString("es-CO", {
+                timeZone: "America/Bogota",
+                day: "2-digit",
+                month: "short",
+              })}
             </span>
           </div>
 

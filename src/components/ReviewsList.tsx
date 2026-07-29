@@ -27,6 +27,7 @@ export default function ReviewsList({ reviews }: { reviews: ReviewLog[] }) {
             <p className="truncate text-sm font-medium">{review.google_profile_name_raw}</p>
             <p className="text-xs text-slate-500">
               {new Date(review.submitted_at).toLocaleDateString("es-CO", {
+                timeZone: "America/Bogota",
                 day: "2-digit",
                 month: "short",
                 hour: "2-digit",

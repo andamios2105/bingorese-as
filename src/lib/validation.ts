@@ -58,18 +58,25 @@ export function sanitizeReviewUrl(url: string): string {
   return url.trim().toLowerCase().split("?")[0].replace(/\/+$/, "");
 }
 
+// Convierte una fecha calendario "YYYY-MM-DD" a un instante UTC a medianoche,
+// para poder restar días sin que la zona horaria del servidor (Netlify corre
+// en UTC) desfase el resultado respecto a la hora de Colombia.
+function dateOnlyToUtcMs(isoDate: string): number {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
 export function daysUntil(dateStr: string | null): number | null {
   if (!dateStr) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr + "T00:00:00");
-  const diffMs = target.getTime() - today.getTime();
+  const todayInBogota = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+  const diffMs = dateOnlyToUtcMs(dateStr) - dateOnlyToUtcMs(todayInBogota);
   return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
 export function formatDrawDate(dateStr: string | null): string {
   if (!dateStr) return "";
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("es-CO", {
+  return new Date(dateStr + "T00:00:00Z").toLocaleDateString("es-CO", {
+    timeZone: "UTC",
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -91,6 +98,7 @@ export function timeSinceLabel(dateStr: string | null): string {
 export function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return "";
   return new Date(dateStr).toLocaleString("es-CO", {
+    timeZone: "America/Bogota",
     day: "2-digit",
     month: "short",
     year: "numeric",

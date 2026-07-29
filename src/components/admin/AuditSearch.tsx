@@ -70,7 +70,7 @@ export default function AuditSearch() {
                 </span>
               </div>
               <p className="text-xs text-slate-600">
-                Registrado el {new Date(r.registered_at).toLocaleDateString("es-CO")}
+                Registrado el {new Date(r.registered_at).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })}
               </p>
             </li>
           ))}
