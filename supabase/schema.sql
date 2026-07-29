@@ -1556,25 +1556,7 @@ select
   pr.cycle_number,
   pr.requested_at,
   pr.resolved_at,
-  (
-    -- Todas las reseñas verificadas de este empleado hasta el momento de
-    -- pedir el cobro, menos las que ya se pagaron en cobros aprobados
-    -- anteriores. NO se filtra por counted_in_cycle: ese número queda fijo
-    -- en la reseña desde que se verificó, así que una reseña "sobrante" de
-    -- un cobro parcial anterior conserva el ciclo viejo para siempre aunque
-    -- siga sumando al total actual — filtrar por ciclo la dejaba afuera por
-    -- error y hacía ver un descuadre que no existía.
-    select
-      (select count(*) from public.reviews_log rl
-        where rl.promoter_id = pr.promoter_id
-          and rl.status = 'verified'
-          and rl.verified_at <= pr.requested_at)
-      -
-      (select coalesce(sum(prev.reviews_count), 0) from public.payout_requests prev
-        where prev.promoter_id = pr.promoter_id
-          and prev.status = 'approved'
-          and prev.resolved_at <= pr.requested_at)
-  ) as verified_reviews_in_cycle
+  pr.payment_proof_url
 from public.payout_requests pr
 join public.profiles p on p.id = pr.promoter_id;
 

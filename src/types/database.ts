@@ -107,7 +107,6 @@ export interface PayoutRequest {
 export interface AdminPayoutRequestView extends PayoutRequest {
   full_name: string;
   email: string;
-  verified_reviews_in_cycle: number;
 }
 
 export interface AppSettings {

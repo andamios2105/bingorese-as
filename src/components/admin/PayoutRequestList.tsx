@@ -95,11 +95,7 @@ export default function PayoutRequestList({ payouts }: { payouts: AdminPayoutReq
                 {p.reviews_count} × {formatCOP(p.rate_applied)}
               </p>
             </div>
-            <div className="rounded-lg bg-slate-800 px-3 py-2">
-              <p className="text-slate-500">Confirmación (deben coincidir)</p>
-              <p className="font-semibold">{p.verified_reviews_in_cycle} reseñas</p>
-            </div>
-            <div className="col-span-2 rounded-lg bg-slate-800 px-3 py-2 capitalize">
+            <div className="rounded-lg bg-slate-800 px-3 py-2 capitalize">
               <p className="text-slate-500">Pago a</p>
               <p className="font-semibold">
                 {p.payment_method} · {p.payment_number}
