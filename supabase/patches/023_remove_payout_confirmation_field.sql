@@ -15,7 +15,11 @@
 -- columna extra en la vista; reviews_count/rate_applied/amount siguen
 -- intactos en payout_requests).
 
-create or replace view public.admin_payout_requests_view as
+-- CREATE OR REPLACE VIEW no permite quitar/renombrar columnas (solo
+-- agregar nuevas al final) — hay que borrarla y volver a crearla.
+drop view if exists public.admin_payout_requests_view;
+
+create view public.admin_payout_requests_view as
 select
   pr.id,
   pr.promoter_id,
