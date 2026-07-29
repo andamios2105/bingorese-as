@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { BingoTable, TableStatus } from "@/types/database";
 import CreateTableForm from "@/components/admin/CreateTableForm";
 import TableQuickActions from "@/components/admin/TableQuickActions";
+import ReviewHistoryButton from "@/components/admin/ReviewHistoryButton";
 import { daysUntil } from "@/lib/validation";
 
 const STATUS_BADGE: Record<TableStatus, string> = {
@@ -133,6 +134,9 @@ export default async function AdminTablesPage({
                         )}
                       </p>
                     </Link>
+                    <div className="mt-1.5 px-1">
+                      <ReviewHistoryButton tableId={t.id} label="Ver historial de reseñas" />
+                    </div>
                     <TableQuickActions tableId={t.id} status={t.status} />
                   </li>
                 );

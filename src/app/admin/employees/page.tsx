@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import EmployeeActions from "@/components/admin/EmployeeActions";
 import EmployeeEditButton from "@/components/admin/EmployeeEditButton";
 import VerifyEmployeeButton from "@/components/admin/VerifyEmployeeButton";
+import ReviewHistoryButton from "@/components/admin/ReviewHistoryButton";
 import { currentPayoutAmount, formatCOP, formatDateTime, timeSinceLabel } from "@/lib/validation";
 
 interface PromoterActivity {
@@ -168,6 +169,10 @@ export default async function AdminEmployeesPage() {
                       ? `${e.payment_method} · ${e.payment_number}`
                       : "Sin método de pago configurado"}
                   </span>
+                </div>
+
+                <div className="mt-1.5">
+                  <ReviewHistoryButton promoterId={e.id} />
                 </div>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">

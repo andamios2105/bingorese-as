@@ -6,6 +6,7 @@ import AdminAssignableGrid from "@/components/admin/AdminAssignableGrid";
 import TableAccessManager, { AccessMember } from "@/components/admin/TableAccessManager";
 import TableManagementPanel from "@/components/admin/TableManagementPanel";
 import TablePrizeInfo from "@/components/TablePrizeInfo";
+import ReviewHistoryButton from "@/components/admin/ReviewHistoryButton";
 
 export default async function AdminTableDetailPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -63,6 +64,9 @@ export default async function AdminTableDetailPage({ params }: { params: { id: s
         <p className="text-xs text-slate-500">
           {claimed}/100 casillas reclamadas · estado: {table.status}
         </p>
+        <div className="mt-1">
+          <ReviewHistoryButton tableId={table.id} label="Ver historial de reseñas" />
+        </div>
       </div>
 
       <TablePrizeInfo
