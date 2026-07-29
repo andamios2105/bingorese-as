@@ -7,6 +7,7 @@ import ImageLightbox from "@/components/ImageLightbox";
 export interface PendingReviewItem {
   id: string;
   google_profile_name_raw: string;
+  reviewer_phone: string | null;
   screenshot_url: string;
   submitted_at: string;
   cell_number: number;
@@ -67,6 +68,9 @@ export default function ReviewVerificationList({ reviews }: { reviews: PendingRe
           <div className="mb-2 flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate font-semibold">{r.google_profile_name_raw}</p>
+              {r.reviewer_phone && (
+                <p className="truncate text-xs font-semibold text-sky-400">📞 {r.reviewer_phone}</p>
+              )}
               <p className="truncate text-xs text-slate-500">
                 {r.promoter_name} · {r.promoter_email}
               </p>

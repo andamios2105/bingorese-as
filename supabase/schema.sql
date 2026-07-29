@@ -202,6 +202,10 @@ create table public.reviews_log (
   -- (el admin asignó la casilla directamente, sin una reseña real detrás).
   google_handle text,
   google_profile_name_raw text not null,
+  -- Celular de la persona que dejó la reseña (para poder contactarla si
+  -- esa casilla/boleta resulta ganadora del sorteo). NULL cuando
+  -- assigned_by_admin=true, igual que google_handle/screenshot_url.
+  reviewer_phone text,
   screenshot_url text,
   status text not null default 'pending' check (status in ('pending', 'verified', 'rejected')),
   assigned_by_admin boolean not null default false,
@@ -251,6 +255,9 @@ create table public.payout_requests (
   requested_at timestamptz not null default now(),
   resolved_at timestamptz,
   resolved_by uuid references public.profiles (id),
+  -- Captura del comprobante de pago (transferencia, etc.) que el admin
+  -- sube al aprobar, para que el empleado pueda verificar que ya se pagó.
+  payment_proof_url text,
   -- Un mismo empleado solo puede tener una solicitud por ciclo (cobrar
   -- resetea el ciclo, así que no hay forma de pedir dos veces el mismo):
   unique (promoter_id, cycle_number)
@@ -869,7 +876,8 @@ create or replace function public.submit_review(
   p_table_id uuid,
   p_cell_number int,
   p_google_profile_name text,
-  p_screenshot_url text
+  p_screenshot_url text,
+  p_reviewer_phone text
 ) returns public.reviews_log
 language plpgsql
 security definer
@@ -896,6 +904,10 @@ begin
 
   if trim(coalesce(p_screenshot_url, '')) = '' then
     raise exception 'Debes subir una captura de pantalla de la reseña.';
+  end if;
+
+  if trim(coalesce(p_reviewer_phone, '')) = '' then
+    raise exception 'Debes escribir el celular de quien dejó la reseña, por si gana el premio.';
   end if;
 
   select * into v_table from public.bingo_tables where id = p_table_id for update;
@@ -932,9 +944,9 @@ begin
 
   begin
     insert into public.reviews_log (
-      table_id, cell_number, promoter_id, google_handle, google_profile_name_raw, screenshot_url, status
+      table_id, cell_number, promoter_id, google_handle, google_profile_name_raw, reviewer_phone, screenshot_url, status
     ) values (
-      p_table_id, p_cell_number, v_promoter_id, v_handle, v_display_name, p_screenshot_url, 'pending'
+      p_table_id, p_cell_number, v_promoter_id, v_handle, v_display_name, trim(p_reviewer_phone), p_screenshot_url, 'pending'
     ) returning * into v_new_review;
   exception when unique_violation then
     raise exception 'Esa casilla ya fue reclamada por otro empleado. Elige otra.';
@@ -1199,7 +1211,7 @@ $$;
 -- ---------------------------------------------------------------------
 -- admin_approve_payout: paga y RESETEA el progreso de ESE empleado
 -- ---------------------------------------------------------------------
-create or replace function public.admin_approve_payout(p_payout_id uuid)
+create or replace function public.admin_approve_payout(p_payout_id uuid, p_payment_proof_url text default null)
 returns public.payout_requests
 language plpgsql
 security definer
@@ -1221,7 +1233,10 @@ begin
   end if;
 
   update public.payout_requests
-     set status = 'approved', resolved_at = now(), resolved_by = auth.uid()
+     set status = 'approved',
+         resolved_at = now(),
+         resolved_by = auth.uid(),
+         payment_proof_url = nullif(trim(coalesce(p_payment_proof_url, '')), '')
    where id = p_payout_id
    returning * into v_payout;
 
@@ -1513,3 +1528,14 @@ create policy "review_screenshots_authenticated_upload"
   on storage.objects for insert
   to authenticated
   with check (bucket_id = 'review-screenshots');
+
+-- Bucket separado para comprobantes de pago (solo el admin sube ahí).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('payment-proofs', 'payment-proofs', true, 15728640, array['image/png', 'image/jpeg', 'image/webp'])
+on conflict (id) do update set public = true, file_size_limit = 15728640;
+
+drop policy if exists "payment_proofs_admin_upload" on storage.objects;
+create policy "payment_proofs_admin_upload"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'payment-proofs' and public.is_admin());

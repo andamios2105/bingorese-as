@@ -10,7 +10,7 @@ export default async function AdminReviewsPage() {
     supabase
       .from("reviews_log")
       .select(
-        "id, google_profile_name_raw, screenshot_url, submitted_at, cell_number, bingo_tables(name), profiles:promoter_id(full_name, email)"
+        "id, google_profile_name_raw, reviewer_phone, screenshot_url, submitted_at, cell_number, bingo_tables(name), profiles:promoter_id(full_name, email)"
       )
       .eq("status", "pending")
       .order("submitted_at", { ascending: true }),
@@ -20,6 +20,7 @@ export default async function AdminReviewsPage() {
   const reviews: PendingReviewItem[] = (data ?? []).map((r: any) => ({
     id: r.id,
     google_profile_name_raw: r.google_profile_name_raw,
+    reviewer_phone: r.reviewer_phone,
     screenshot_url: r.screenshot_url,
     submitted_at: r.submitted_at,
     cell_number: r.cell_number,

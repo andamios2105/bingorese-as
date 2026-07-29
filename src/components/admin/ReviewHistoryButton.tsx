@@ -8,6 +8,7 @@ interface HistoryRow {
   id: string;
   cell_number: number;
   google_profile_name_raw: string;
+  reviewer_phone: string | null;
   status: "pending" | "verified" | "rejected";
   submitted_at: string;
   rejection_reason: string | null;
@@ -53,7 +54,7 @@ export default function ReviewHistoryButton({
     let query = supabase
       .from("reviews_log")
       .select(
-        "id, cell_number, google_profile_name_raw, status, submitted_at, rejection_reason, assigned_by_admin, bingo_tables(name), profiles:promoter_id(full_name)"
+        "id, cell_number, google_profile_name_raw, reviewer_phone, status, submitted_at, rejection_reason, assigned_by_admin, bingo_tables(name), profiles:promoter_id(full_name)"
       )
       .order("submitted_at", { ascending: false })
       .limit(200);
@@ -74,6 +75,7 @@ export default function ReviewHistoryButton({
         id: r.id,
         cell_number: r.cell_number,
         google_profile_name_raw: r.google_profile_name_raw,
+        reviewer_phone: r.reviewer_phone,
         status: r.status,
         submitted_at: r.submitted_at,
         rejection_reason: r.rejection_reason,
@@ -124,6 +126,9 @@ export default function ReviewHistoryButton({
                         <p className="truncate text-sm font-medium">
                           {r.assigned_by_admin ? `(Asignada) ${r.google_profile_name_raw}` : r.google_profile_name_raw}
                         </p>
+                        {r.reviewer_phone && (
+                          <p className="truncate text-xs font-semibold text-sky-400">📞 {r.reviewer_phone}</p>
+                        )}
                         {tableId ? (
                           r.promoter_name && <p className="truncate text-xs text-slate-500">{r.promoter_name}</p>
                         ) : (

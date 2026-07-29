@@ -8,6 +8,7 @@ import ImageLightbox from "@/components/ImageLightbox";
 
 interface ExtraDetail {
   google_profile_name_raw: string;
+  reviewer_phone: string | null;
   screenshot_url: string | null;
   assigned_by_admin: boolean;
 }
@@ -26,7 +27,7 @@ export default function CellDetailModal({ cell, onClose }: { cell: TableGridCell
     // aplica, simplemente no llega nada y el modal se queda con lo básico.
     supabase
       .from("reviews_log")
-      .select("google_profile_name_raw, screenshot_url, assigned_by_admin")
+      .select("google_profile_name_raw, reviewer_phone, screenshot_url, assigned_by_admin")
       .eq("table_id", cell.table_id)
       .eq("cell_number", cell.cell_number)
       .in("status", ["pending", "verified"])
@@ -94,6 +95,13 @@ export default function CellDetailModal({ cell, onClose }: { cell: TableGridCell
                 </p>
                 <p className="font-medium">{extra.google_profile_name_raw}</p>
               </div>
+
+              {extra.reviewer_phone && (
+                <div>
+                  <p className="text-xs text-slate-500">Celular (por si gana el premio)</p>
+                  <p className="font-medium">{extra.reviewer_phone}</p>
+                </div>
+              )}
 
               {extra.screenshot_url && (
                 <div>

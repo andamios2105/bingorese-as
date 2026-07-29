@@ -18,6 +18,7 @@ export default function ReviewModal({
   const router = useRouter();
   const supabase = createClient();
   const [googleProfileName, setGoogleProfileName] = useState("");
+  const [reviewerPhone, setReviewerPhone] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -66,6 +67,7 @@ export default function ReviewModal({
         tableId,
         cellNumber,
         googleProfileName,
+        reviewerPhone,
         screenshotUrl: publicUrlData.publicUrl,
       }),
     });
@@ -109,6 +111,23 @@ export default function ReviewModal({
             />
             <p className="mt-1 text-xs text-slate-500">
               Debe coincidir con el nombre que aparece en Google Maps.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-300">
+              Celular de quien dejó la reseña
+            </label>
+            <input
+              required
+              type="tel"
+              value={reviewerPhone}
+              onChange={(e) => setReviewerPhone(e.target.value)}
+              placeholder="Ej: 3001234567"
+              className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-base outline-none focus:border-emerald-500"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Por si esta casilla gana el premio — es la única forma de contactarlo.
             </p>
           </div>
 

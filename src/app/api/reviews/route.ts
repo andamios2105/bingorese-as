@@ -17,10 +17,14 @@ export async function POST(request: NextRequest) {
   const cellNumber: number | undefined = body?.cellNumber;
   const googleProfileName: string | undefined = body?.googleProfileName;
   const screenshotUrl: string | undefined = body?.screenshotUrl;
+  const reviewerPhone: string | undefined = body?.reviewerPhone;
 
-  if (!tableId || !cellNumber || !googleProfileName?.trim() || !screenshotUrl?.trim()) {
+  if (!tableId || !cellNumber || !googleProfileName?.trim() || !screenshotUrl?.trim() || !reviewerPhone?.trim()) {
     return NextResponse.json(
-      { error: "Faltan datos: tablero, casilla, nombre de Google y captura de pantalla son obligatorios." },
+      {
+        error:
+          "Faltan datos: tablero, casilla, nombre de Google, celular y captura de pantalla son obligatorios.",
+      },
       { status: 400 }
     );
   }
@@ -33,6 +37,7 @@ export async function POST(request: NextRequest) {
     p_cell_number: cellNumber,
     p_google_profile_name: googleProfileName.trim(),
     p_screenshot_url: screenshotUrl.trim(),
+    p_reviewer_phone: reviewerPhone.trim(),
   });
 
   if (error) {

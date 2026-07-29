@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { PayoutRequest } from "@/types/database";
 import { formatCOP, formatDateTime } from "@/lib/validation";
+import ImageLightbox from "@/components/ImageLightbox";
 
 export default function PayoutHistory({ payouts }: { payouts: PayoutRequest[] }) {
   const [open, setOpen] = useState(false);
+  const [proofUrl, setProofUrl] = useState<string | null>(null);
   const resolved = payouts.filter((p) => p.status !== "pending");
   if (resolved.length === 0) return null;
 
@@ -57,6 +59,14 @@ export default function PayoutHistory({ payouts }: { payouts: PayoutRequest[] })
                     <p className="text-xs text-slate-500">
                       {p.reviews_count ?? 0} reseñas · {formatDateTime(p.resolved_at ?? p.requested_at)}
                     </p>
+                    {p.status === "approved" && p.payment_proof_url && (
+                      <button
+                        onClick={() => setProofUrl(p.payment_proof_url)}
+                        className="mt-0.5 text-xs text-sky-400 underline underline-offset-2"
+                      >
+                        Ver comprobante
+                      </button>
+                    )}
                   </div>
                   <span
                     className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -70,6 +80,10 @@ export default function PayoutHistory({ payouts }: { payouts: PayoutRequest[] })
             </ul>
           </div>
         </div>
+      )}
+
+      {proofUrl && (
+        <ImageLightbox src={proofUrl} alt="Comprobante de pago" onClose={() => setProofUrl(null)} />
       )}
     </>
   );

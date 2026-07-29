@@ -66,6 +66,7 @@ export interface ReviewLog {
   promoter_id: string;
   google_handle: string | null;
   google_profile_name_raw: string;
+  reviewer_phone: string | null;
   screenshot_url: string | null;
   status: ReviewStatus;
   assigned_by_admin: boolean;
@@ -100,6 +101,7 @@ export interface PayoutRequest {
   requested_at: string;
   resolved_at: string | null;
   resolved_by: string | null;
+  payment_proof_url: string | null;
 }
 
 export interface AdminPayoutRequestView extends PayoutRequest {
