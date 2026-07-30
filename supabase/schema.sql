@@ -131,6 +131,10 @@ create table public.bingo_tables (
   -- Palabra/frase que el admin pide mencionar en cada reseña de este
   -- tablero (para poder ubicarla rápido en el listado de Google Maps).
   keyword text,
+  -- Bono extra en COP que se suma por CADA reseña verificada de este
+  -- tablero, encima de la tarifa progresiva normal — para incentivar a
+  -- los empleados a llenar este tablero más rápido.
+  bonus_rate numeric(12, 0) not null default 0 check (bonus_rate >= 0),
   created_by uuid not null references public.profiles (id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -161,6 +165,10 @@ create table public.promoter_progress (
   promoter_id uuid primary key references public.profiles (id) on delete cascade,
   verified_count int not null default 0 check (verified_count >= 0),
   cycle_number int not null default 1 check (cycle_number >= 1),
+  -- Bono acumulado en COP de tableros con bonus_rate > 0 (se suma al
+  -- aprobar una reseña de esos tableros, se resta lo pagado al aprobar
+  -- un cobro — mismo patrón que verified_count).
+  bonus_balance numeric(12, 0) not null default 0 check (bonus_balance >= 0),
   updated_at timestamptz not null default now()
 );
 
@@ -248,7 +256,10 @@ create table public.payout_requests (
   -- (no solo las nuevas). Mínimo 10 reseñas para poder cobrar.
   reviews_count int not null check (reviews_count >= 10),
   rate_applied numeric(12, 0) not null,
-  amount numeric(12, 0) generated always as (reviews_count * rate_applied) stored,
+  -- Bono acumulado (de tableros con pago extra) congelado al pedir el
+  -- cobro, igual que reviews_count/rate_applied.
+  bonus_amount numeric(12, 0) not null default 0,
+  amount numeric(12, 0) generated always as (reviews_count * rate_applied + bonus_amount) stored,
   payment_method text not null,
   payment_number text not null,
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
@@ -584,7 +595,8 @@ create or replace function public.admin_create_table(
   p_prize text default null,
   p_lottery_name text default null,
   p_draw_date date default null,
-  p_keyword text default null
+  p_keyword text default null,
+  p_bonus_rate numeric default 0
 )
 returns public.bingo_tables
 language plpgsql
@@ -600,9 +612,12 @@ begin
   if trim(coalesce(p_name, '')) = '' then
     raise exception 'El tablero necesita un nombre.';
   end if;
+  if coalesce(p_bonus_rate, 0) < 0 then
+    raise exception 'El bono extra no puede ser negativo.';
+  end if;
 
   insert into public.bingo_tables (
-    name, business_name, google_maps_url, prize, lottery_name, draw_date, keyword, created_by
+    name, business_name, google_maps_url, prize, lottery_name, draw_date, keyword, bonus_rate, created_by
   ) values (
     initcap(trim(p_name)),
     nullif(initcap(trim(coalesce(p_business_name, ''))), ''),
@@ -611,6 +626,7 @@ begin
     nullif(initcap(trim(coalesce(p_lottery_name, ''))), ''),
     p_draw_date,
     nullif(trim(coalesce(p_keyword, '')), ''),
+    coalesce(p_bonus_rate, 0),
     auth.uid()
   )
   returning * into v_table;
@@ -630,7 +646,8 @@ create or replace function public.admin_update_table_details(
   p_prize text,
   p_lottery_name text,
   p_draw_date date,
-  p_keyword text default null
+  p_keyword text default null,
+  p_bonus_rate numeric default 0
 ) returns public.bingo_tables
 language plpgsql
 security definer
@@ -645,6 +662,9 @@ begin
   if trim(coalesce(p_name, '')) = '' then
     raise exception 'El tablero necesita un nombre.';
   end if;
+  if coalesce(p_bonus_rate, 0) < 0 then
+    raise exception 'El bono extra no puede ser negativo.';
+  end if;
 
   update public.bingo_tables
      set name = initcap(trim(p_name)),
@@ -654,6 +674,7 @@ begin
          lottery_name = nullif(initcap(trim(coalesce(p_lottery_name, ''))), ''),
          draw_date = p_draw_date,
          keyword = nullif(trim(coalesce(p_keyword, '')), ''),
+         bonus_rate = coalesce(p_bonus_rate, 0),
          updated_at = now()
    where id = p_table_id
    returning * into v_table;
@@ -1021,7 +1042,9 @@ begin
     on conflict (promoter_id) do nothing;
 
   update public.promoter_progress
-     set verified_count = verified_count + 1, updated_at = now()
+     set verified_count = verified_count + 1,
+         bonus_balance = bonus_balance + coalesce(v_table.bonus_rate, 0),
+         updated_at = now()
    where promoter_id = p_promoter_id
    returning * into v_progress;
 
@@ -1062,6 +1085,7 @@ as $$
 declare
   v_review public.reviews_log;
   v_progress public.promoter_progress;
+  v_bonus_rate numeric;
 begin
   if not public.is_admin() then
     raise exception 'Solo un administrador puede aprobar reseñas.';
@@ -1075,11 +1099,15 @@ begin
     raise exception 'Esta reseña ya fue procesada (estado actual: %).', v_review.status;
   end if;
 
+  select bonus_rate into v_bonus_rate from public.bingo_tables where id = v_review.table_id;
+
   insert into public.promoter_progress (promoter_id) values (v_review.promoter_id)
     on conflict (promoter_id) do nothing;
 
   update public.promoter_progress
-     set verified_count = verified_count + 1, updated_at = now()
+     set verified_count = verified_count + 1,
+         bonus_balance = bonus_balance + coalesce(v_bonus_rate, 0),
+         updated_at = now()
    where promoter_id = v_review.promoter_id
    returning * into v_progress;
 
@@ -1158,6 +1186,7 @@ declare
   v_review public.reviews_log;
   v_progress public.promoter_progress;
   v_claimed_count int;
+  v_bonus_rate numeric;
 begin
   if not public.is_admin() then
     raise exception 'Solo un administrador puede borrar una casilla.';
@@ -1190,8 +1219,12 @@ begin
         'Este empleado tiene una solicitud de cobro pendiente que ya cuenta esta reseña. Apruébala o recházala primero, y luego borra la casilla.';
     end if;
 
+    select bonus_rate into v_bonus_rate from public.bingo_tables where id = v_review.table_id;
+
     update public.promoter_progress
-       set verified_count = greatest(verified_count - 1, 0), updated_at = now()
+       set verified_count = greatest(verified_count - 1, 0),
+           bonus_balance = greatest(bonus_balance - coalesce(v_bonus_rate, 0), 0),
+           updated_at = now()
      where promoter_id = v_review.promoter_id;
   end if;
 
@@ -1278,9 +1311,10 @@ begin
   v_rate := public.payout_rate_for_count(v_progress.verified_count);
 
   insert into public.payout_requests (
-    promoter_id, cycle_number, reviews_count, rate_applied, payment_method, payment_number
+    promoter_id, cycle_number, reviews_count, rate_applied, bonus_amount, payment_method, payment_number
   ) values (
-    v_promoter_id, v_progress.cycle_number, v_progress.verified_count, v_rate, v_profile.payment_method, v_profile.payment_number
+    v_promoter_id, v_progress.cycle_number, v_progress.verified_count, v_rate, v_progress.bonus_balance,
+    v_profile.payment_method, v_profile.payment_number
   ) returning * into v_request;
 
   return v_request;
@@ -1325,6 +1359,7 @@ begin
   -- de perderse en un reset a 0.
   update public.promoter_progress
      set verified_count = greatest(verified_count - v_payout.reviews_count, 0),
+         bonus_balance = greatest(bonus_balance - v_payout.bonus_amount, 0),
          cycle_number = cycle_number + 1,
          updated_at = now()
    where promoter_id = v_payout.promoter_id;
@@ -1551,6 +1586,7 @@ select
   pr.payment_number,
   pr.reviews_count,
   pr.rate_applied,
+  pr.bonus_amount,
   pr.amount,
   pr.status,
   pr.cycle_number,

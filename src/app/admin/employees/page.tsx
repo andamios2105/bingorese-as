@@ -22,11 +22,15 @@ interface PromoterLastLocation {
   gps_accuracy_m: number | null;
 }
 
-function extractVerifiedCount(progress: unknown): number {
-  if (Array.isArray(progress)) {
-    return (progress[0] as { verified_count?: number } | undefined)?.verified_count ?? 0;
-  }
-  return (progress as { verified_count?: number } | null | undefined)?.verified_count ?? 0;
+interface ExtractedProgress {
+  verified_count: number;
+  bonus_balance: number;
+}
+
+function extractProgress(progress: unknown): ExtractedProgress {
+  const row = Array.isArray(progress) ? progress[0] : progress;
+  const p = row as { verified_count?: number; bonus_balance?: number } | null | undefined;
+  return { verified_count: p?.verified_count ?? 0, bonus_balance: p?.bonus_balance ?? 0 };
 }
 
 export default async function AdminEmployeesPage() {
@@ -35,7 +39,7 @@ export default async function AdminEmployeesPage() {
   const { data: employees, error } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, email, phone, payment_method, payment_number, is_suspended, suspended_until, promoter_progress(verified_count)"
+      "id, full_name, email, phone, payment_method, payment_number, is_suspended, suspended_until, promoter_progress(verified_count, bonus_balance)"
     )
     .eq("role", "promoter")
     .order("full_name");
@@ -107,6 +111,9 @@ export default async function AdminEmployeesPage() {
             const ipLocationLabel = [location?.ip_city, location?.ip_region, location?.ip_country]
               .filter(Boolean)
               .join(", ");
+            const { verified_count: verifiedCount, bonus_balance: bonusBalance } = extractProgress(
+              e.promoter_progress
+            );
             return (
               <li key={e.id} className="rounded-2xl bg-slate-900 p-4 shadow-xl">
                 <div className="flex items-start justify-between gap-2">
@@ -116,10 +123,13 @@ export default async function AdminEmployeesPage() {
                     {e.phone && <p className="text-xs text-slate-500">{e.phone}</p>}
                   </div>
                   <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400">
-                    {formatCOP(currentPayoutAmount(extractVerifiedCount(e.promoter_progress)))}
+                    {formatCOP(currentPayoutAmount(verifiedCount, bonusBalance))}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500">{extractVerifiedCount(e.promoter_progress)} reseñas acumuladas</p>
+                <p className="text-xs text-slate-500">
+                  {verifiedCount} reseñas acumuladas
+                  {bonusBalance > 0 && ` · +${formatCOP(bonusBalance)} de bono`}
+                </p>
 
                 <p className="mt-1.5 text-xs text-slate-500">
                   Última conexión: {lastSignInAt ? formatDateTime(lastSignInAt) : "nunca"} ·{" "}

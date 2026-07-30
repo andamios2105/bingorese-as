@@ -16,8 +16,8 @@ export function canClaimPayout(verifiedCount: number): boolean {
   return verifiedCount >= MIN_REVIEWS_TO_CLAIM;
 }
 
-export function currentPayoutAmount(verifiedCount: number): number {
-  return verifiedCount * payoutRateForCount(verifiedCount);
+export function currentPayoutAmount(verifiedCount: number, bonusBalance = 0): number {
+  return verifiedCount * payoutRateForCount(verifiedCount) + bonusBalance;
 }
 
 /**

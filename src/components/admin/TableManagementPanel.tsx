@@ -21,6 +21,7 @@ export default function TableManagementPanel({ table, claimedCount }: { table: B
   const [lotteryName, setLotteryName] = useState(table.lottery_name ?? "");
   const [drawDate, setDrawDate] = useState(table.draw_date ?? "");
   const [keyword, setKeyword] = useState(table.keyword ?? "");
+  const [bonusRate, setBonusRate] = useState(String(table.bonus_rate ?? 0));
   const [saving, setSaving] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -43,6 +44,7 @@ export default function TableManagementPanel({ table, claimedCount }: { table: B
         lotteryName,
         drawDate: drawDate || null,
         keyword,
+        bonusRate: bonusRate ? Number(bonusRate) : 0,
       }),
     });
     const body = await res.json();
@@ -203,6 +205,23 @@ export default function TableManagementPanel({ table, claimedCount }: { table: B
             className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
           />
           <p className="mt-1 text-xs text-slate-500">La palabra o frase que cada reseña de este tablero debe mencionar.</p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-400">Bono extra por reseña (opcional)</label>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            inputMode="numeric"
+            value={bonusRate}
+            onChange={(e) => setBonusRate(e.target.value)}
+            placeholder="Ej: 300"
+            className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Se suma a la tarifa normal por cada reseña verificada de este tablero.
+          </p>
         </div>
 
         {error && <p className="text-sm text-red-400">{error}</p>}

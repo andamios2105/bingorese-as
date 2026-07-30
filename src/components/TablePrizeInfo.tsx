@@ -1,6 +1,6 @@
 import QRCode from "qrcode";
 import { BingoTable } from "@/types/database";
-import { daysUntil, formatDrawDate } from "@/lib/validation";
+import { daysUntil, formatCOP, formatDrawDate } from "@/lib/validation";
 
 export default async function TablePrizeInfo({
   table,
@@ -9,7 +9,7 @@ export default async function TablePrizeInfo({
   table: BingoTable;
   qrUrl?: string | null;
 }) {
-  const hasInfo = !!(table.prize || table.lottery_name || table.draw_date || table.keyword);
+  const hasInfo = !!(table.prize || table.lottery_name || table.draw_date || table.keyword || table.bonus_rate > 0);
   if (!hasInfo && !qrUrl) return null;
 
   const days = daysUntil(table.draw_date);
@@ -21,6 +21,11 @@ export default async function TablePrizeInfo({
     <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-violet-600 to-violet-700 p-4 text-white shadow-xl">
       {hasInfo && (
         <div className="min-w-0 flex-1">
+          {table.bonus_rate > 0 && (
+            <p className="mb-2 inline-block rounded-full bg-amber-400 px-2.5 py-1 text-xs font-extrabold text-slate-950">
+              🔥 +{formatCOP(table.bonus_rate)} extra por cada reseña aquí
+            </p>
+          )}
           {table.prize && <p className="text-lg font-extrabold leading-tight">🎁 Premio: {table.prize}</p>}
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-violet-100">
             {table.lottery_name && <span>Juega con: {table.lottery_name}</span>}

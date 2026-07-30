@@ -4,7 +4,7 @@ import { BingoTable, TableStatus } from "@/types/database";
 import CreateTableForm from "@/components/admin/CreateTableForm";
 import TableQuickActions from "@/components/admin/TableQuickActions";
 import ReviewHistoryButton from "@/components/admin/ReviewHistoryButton";
-import { daysUntil } from "@/lib/validation";
+import { daysUntil, formatCOP } from "@/lib/validation";
 
 const STATUS_BADGE: Record<TableStatus, string> = {
   active: "bg-emerald-500/15 text-emerald-400",
@@ -122,6 +122,11 @@ export default async function AdminTablesPage({
                           {t.prize}
                           {days !== null && (t.prize ? " · " : "")}
                           {days !== null && (days > 0 ? `faltan ${days} días` : days === 0 ? "juega hoy" : "ya jugó")}
+                        </p>
+                      )}
+                      {t.bonus_rate > 0 && (
+                        <p className="mt-1 text-xs font-semibold text-amber-400">
+                          🔥 +{formatCOP(t.bonus_rate)} extra por reseña
                         </p>
                       )}
                       <p className="mt-1 text-xs text-slate-500">{claimedByTable[t.id] ?? 0}/100 casillas reclamadas</p>

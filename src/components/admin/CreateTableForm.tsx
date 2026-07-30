@@ -13,6 +13,7 @@ export default function CreateTableForm() {
   const [lotteryName, setLotteryName] = useState("");
   const [drawDate, setDrawDate] = useState("");
   const [keyword, setKeyword] = useState("");
+  const [bonusRate, setBonusRate] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +33,7 @@ export default function CreateTableForm() {
         lotteryName,
         drawDate: drawDate || null,
         keyword,
+        bonusRate: bonusRate ? Number(bonusRate) : 0,
       }),
     });
     const body = await res.json();
@@ -49,6 +51,7 @@ export default function CreateTableForm() {
     setLotteryName("");
     setDrawDate("");
     setKeyword("");
+    setBonusRate("");
     router.refresh();
   }
 
@@ -131,6 +134,26 @@ export default function CreateTableForm() {
           className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
         />
         <p className="mt-1 text-xs text-slate-500">La palabra o frase que cada reseña de este tablero debe mencionar.</p>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-400">
+          Bono extra por reseña (opcional)
+        </label>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          inputMode="numeric"
+          value={bonusRate}
+          onChange={(e) => setBonusRate(e.target.value)}
+          placeholder="Ej: 300"
+          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
+        />
+        <p className="mt-1 text-xs text-slate-500">
+          Se suma a la tarifa normal por cada reseña verificada de este tablero — úsalo para incentivar a los
+          empleados a llenarlo más rápido.
+        </p>
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}

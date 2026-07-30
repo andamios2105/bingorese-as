@@ -6,10 +6,12 @@ import { canClaimPayout, currentPayoutAmount, formatCOP, payoutRateForCount } fr
 
 export default function ClaimPayoutButton({
   verifiedCount,
+  bonusBalance = 0,
   hasPaymentMethod,
   hasPendingRequest,
 }: {
   verifiedCount: number;
+  bonusBalance?: number;
   hasPaymentMethod: boolean;
   hasPendingRequest: boolean;
 }) {
@@ -23,7 +25,7 @@ export default function ClaimPayoutButton({
   if (hasPendingRequest) return null;
   if (!canClaimPayout(verifiedCount)) return null;
 
-  const amount = currentPayoutAmount(verifiedCount);
+  const amount = currentPayoutAmount(verifiedCount, bonusBalance);
   const rate = payoutRateForCount(verifiedCount);
 
   async function confirmClaim() {
@@ -48,6 +50,7 @@ export default function ClaimPayoutButton({
       <p className="text-2xl font-bold">{formatCOP(amount)}</p>
       <p className="text-xs opacity-80">
         {verifiedCount} reseñas × {formatCOP(rate)}
+        {bonusBalance > 0 && ` + ${formatCOP(bonusBalance)} de bono`}
       </p>
 
       {!hasPaymentMethod && (

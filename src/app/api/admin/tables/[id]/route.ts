@@ -20,9 +20,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const lotteryName: string | null = body?.lotteryName ?? null;
   const drawDate: string | null = body?.drawDate ?? null;
   const keyword: string | null = body?.keyword ?? null;
+  const bonusRate: number = Number(body?.bonusRate) || 0;
 
   if (!name?.trim()) {
     return NextResponse.json({ error: "El tablero necesita un nombre." }, { status: 400 });
+  }
+  if (bonusRate < 0) {
+    return NextResponse.json({ error: "El bono extra no puede ser negativo." }, { status: 400 });
   }
 
   const { data, error } = await supabase.rpc("admin_update_table_details", {
@@ -34,6 +38,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     p_lottery_name: lotteryName,
     p_draw_date: drawDate,
     p_keyword: keyword,
+    p_bonus_rate: bonusRate,
   });
 
   if (error) {

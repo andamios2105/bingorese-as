@@ -76,6 +76,7 @@ export default async function DashboardPage() {
   }
 
   const verifiedCount = progress?.verified_count ?? 0;
+  const bonusBalance = progress?.bonus_balance ?? 0;
 
   const [{ data: tables }, { data: myAccess }] = await Promise.all([
     supabase.from("bingo_tables").select("*").order("created_at", { ascending: false }).returns<BingoTable[]>(),
@@ -146,7 +147,9 @@ export default async function DashboardPage() {
 
       <section className="mb-5 rounded-2xl bg-slate-900 p-4 shadow-xl">
         <div className="mb-3 flex items-baseline justify-between">
-          <p className="text-3xl font-extrabold text-emerald-400">{formatCOP(currentPayoutAmount(verifiedCount))}</p>
+          <p className="text-3xl font-extrabold text-emerald-400">
+            {formatCOP(currentPayoutAmount(verifiedCount, bonusBalance))}
+          </p>
           <p className="text-sm text-slate-500">{verifiedCount} reseñas verificadas</p>
         </div>
         <ProgressBar verifiedCount={verifiedCount} />
@@ -157,6 +160,7 @@ export default async function DashboardPage() {
         <MyPayoutRequests payouts={myPayouts ?? []} />
         <ClaimPayoutButton
           verifiedCount={verifiedCount}
+          bonusBalance={bonusBalance}
           hasPaymentMethod={!!profile?.payment_method}
           hasPendingRequest={hasPendingPayout}
         />
@@ -198,6 +202,11 @@ export default async function DashboardPage() {
                         {days !== null && (days > 0 ? `faltan ${days} días` : days === 0 ? "juega hoy" : "ya jugó")}
                       </p>
                     )}
+                    {t.bonus_rate > 0 && (
+                      <p className="mt-1 text-xs font-semibold text-amber-400">
+                        🔥 +{formatCOP(t.bonus_rate)} extra por reseña
+                      </p>
+                    )}
                     <p className="mt-1 text-xs text-slate-500">{claimed}/100 casillas reclamadas</p>
                   </Link>
                 </li>
@@ -224,6 +233,11 @@ export default async function DashboardPage() {
                   </span>
                 </div>
                 {t.prize && <p className="mt-1 text-xs text-violet-400">{t.prize}</p>}
+                {t.bonus_rate > 0 && (
+                  <p className="mt-1 text-xs font-semibold text-amber-400">
+                    🔥 +{formatCOP(t.bonus_rate)} extra por reseña
+                  </p>
+                )}
                 <p className="mt-1 text-xs text-slate-500">Esperando aprobación del administrador.</p>
               </li>
             ))}
@@ -234,6 +248,11 @@ export default async function DashboardPage() {
                   <RequestAccessButton tableId={t.id} />
                 </div>
                 {t.prize && <p className="mt-1 text-xs text-violet-400">{t.prize}</p>}
+                {t.bonus_rate > 0 && (
+                  <p className="mt-1 text-xs font-semibold text-amber-400">
+                    🔥 +{formatCOP(t.bonus_rate)} extra por reseña
+                  </p>
+                )}
                 <p className="mt-1 text-xs text-slate-500">Postúlate para poder reclamar casillas aquí.</p>
               </li>
             ))}

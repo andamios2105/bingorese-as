@@ -37,6 +37,7 @@ export interface BingoTable {
   business_name: string | null;
   google_maps_url: string | null;
   keyword: string | null;
+  bonus_rate: number;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -56,6 +57,7 @@ export interface PromoterProgress {
   promoter_id: string;
   verified_count: number;
   cycle_number: number;
+  bonus_balance: number;
   updated_at: string;
 }
 
@@ -94,6 +96,7 @@ export interface PayoutRequest {
   cycle_number: number;
   reviews_count: number;
   rate_applied: number;
+  bonus_amount: number;
   amount: number;
   payment_method: string;
   payment_number: string;
